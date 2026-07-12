@@ -10,8 +10,15 @@ StarCraft marine units + SC2 arcade "Zone Control" style beacon capture
 and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
 
 ## Modes
-- **Campaign** — 9 scripted missions (`MISSIONS` array), sequential unlock
-  (`unlocked` var, not persisted across reloads — see To-Do).
+- **Campaign** — 11 scripted missions (`MISSIONS` array), sequential unlock
+  (`unlocked`, persisted — see item 1 below). Two are grid missions
+  (`m.grid` flag, built by `buildGridMissionDef`): M06 "SECTOR PAINT"
+  (grid intro, 1 normal foe) and M10 "RECLAMATION" (2 hard foes who
+  pre-own `m.foesOwn` of the board width from the right, split
+  top/bottom — the region is computed at build time because cell indices
+  depend on screen aspect). Campaign cards/briefs show a "▦ GRID" tag.
+  Note for sims: AI-vs-AI grid battles seesaw — RECLAMATION can run
+  several hundred sim-seconds before elimination; that's expected.
 - **Skirmish** — 1–5 AI foes, 4 difficulties, 4 map types (open/corridors/
   scatter/grid), fully driven by `RULES`/`RULEDEF` custom battle rules.
   **Grid** is an SC2 "Zone Control"-style territory mode: the battlefield
@@ -64,6 +71,39 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   Big/core zones (`Z.big`) mine 2x and spawn faster.
 - **Absorb/conversion** — isolated, heavily-outnumbered units may defect to
   the killer's team on death (`processDeaths()`), capped by supply + hard cap.
+- **Stimpack** — the game's first *ability* (see CONTEXT.md): a one-time
+  `CFG.stimCost` unlock per team (`T.stimOwn`), then an army-wide activation
+  (`doStim`): every living marine pays `CFG.stimHp` HP (clamped to 1, never
+  lethal) for `CFG.stimDur`s of +rof/+spd (`CFG.stimRof/stimSpd`, applied
+  inside `STAT.rof/spd` via `T.stimT>0`). No cooldown — the only gates are
+  the HP price and no re-stim while active (`T.stimT` ticks down in
+  `update`). `stimAct(ti)` = tap/hotkey semantics (buy if locked, else
+  fire). AI: `'stim'` sits in each `PERS` order; `buyPass` **saves up**
+  (breaks out of lower priorities) once it reaches an unaffordable stim;
+  easy AI and versus `bot` teams never buy it. AI fires via `aiThink`
+  when ≥5 hostiles are near its centroid and army HP >50%.
+- **Hotkeys** — solo: `1–7` buy upgrades, `8`/`Space` = stim. Versus:
+  P1 `1–4` + `Space`, P2 `7–0` (`VS_UPGS` order) + `Enter`; `5 6` are a
+  deliberate dead buffer. Labels rendered on tray buttons (`.hk` corner
+  tag via `mkUb`). Hotkeys ignore key auto-repeat and pause/over states.
+- **Profiles** — local per-device identities (see CONTEXT.md: Profile /
+  Profile color / Emblem — deliberately *not* accounts; OAuth was
+  considered and rejected to preserve the no-server single-file design).
+  `PROFILES{list,active}`, `prof()`, `mkProfile`. Per-profile: `unlocked`,
+  `RULES`, `SK`, `VS` (these stay the *working globals*; `applyProfile()` /
+  `stashProfile()` copy in/out on switch & save). Device-global: sound.
+  Save format `ms_save_v2` `{profiles,active,sound}` with one-time v1
+  migration (v1 removed + v2 written immediately). Boot auto-selects
+  `active`; menu chip (`#profChip`, `syncProfChip`) opens `scrProfiles`
+  (create/switch/rename/delete, cap `MAXPROF=8`, two-tap delete) and
+  `scrProfEdit` (name input + 6 color swatches + 12 emblems).
+  **Profile color = team color in all modes** (demo excluded): def
+  builders route every team color through `colAlloc()` which remaps
+  collisions to the first unused palette color. **Emblems**
+  (`drawEmblem`/`embCanvas`, `NEMB=12` procedural insignias) show on the
+  chip, profile rows, end screen (non-versus), P1's versus side tray,
+  and in-world on P1's command beacon + home pad (`Z.homeOf`, drawn
+  while the home zone is still owned).
 - **Input** — pointer events drive a per-team "command point" (`T.cp`);
   units steer toward it (`updateUnits`). Versus splits pointer by screen
   half. WASD / arrow keys also nudge `T.cp` (`moveKeyCp`).

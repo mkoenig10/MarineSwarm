@@ -37,8 +37,12 @@
     background:linear-gradient(0deg,rgba(8,11,17,.94),rgba(8,11,17,.6) 75%,transparent);scrollbar-width:none}
   #tray::-webkit-scrollbar{display:none}
   .ub{flex:0 0 auto;min-width:84px;padding:7px 6px 6px;background:#131a26;border:1px solid #2b3a55;color:#cfd8ea;
-    display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;pointer-events:auto;
+    position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;pointer-events:auto;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+  .ub .hk{position:absolute;top:2px;right:5px;font-style:normal;font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:9px;color:#5c88c9;letter-spacing:0;line-height:1}
+  .ub.rdy{border-color:#ff6a5e}
+  .ub.rdy em{color:#ff8a7a}
   .ub b{font-size:12px;letter-spacing:.12em}
   .ub .pip{font-size:8px;letter-spacing:2px;color:#ffb454;line-height:1}
   .ub em{font-style:normal;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#9fb0cc}
@@ -124,6 +128,29 @@
   .bigend.win{color:#7ee08c}.bigend.lose{color:#ff6a5e}
   #endStats{font-family:ui-monospace,monospace;font-size:13px;color:#9fb0cc;line-height:1.8}
   .keycap{display:inline-block;border:1px solid #3a4c72;padding:0 6px;font-family:ui-monospace,monospace;font-size:11px;background:#0e1420}
+  /* profiles */
+  .mbtn:disabled{opacity:.4;cursor:default}
+  #profChip{display:inline-flex;align-items:center;gap:8px;background:#101724;border:1px solid #2b3a55;
+    color:#9fb0cc;padding:8px 18px;font-size:12px;letter-spacing:.18em;cursor:pointer;text-transform:uppercase;
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+  #profChip:active{background:#1d2a40}
+  #profList{display:flex;flex-direction:column;gap:8px;width:min(92vw,420px)}
+  .prow{display:flex;align-items:center;gap:12px;background:#101724;border:1px solid #2b3a55;
+    padding:8px 14px;cursor:pointer;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+  .prow.on{border-color:#ffb454}
+  .prow .pn{flex:1;text-align:left;font-size:14px;font-weight:700;letter-spacing:.12em}
+  .prow .pp{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#7f8ba3}
+  .pfin{background:#0e1420;border:1px solid #3a4c72;color:#e8eefb;padding:11px 12px;width:min(78vw,300px);
+    text-align:center;letter-spacing:.18em;text-transform:uppercase;font-family:inherit;font-size:15px;outline:none}
+  .pfin:focus{border-color:#ffb454}
+  .sw{width:36px;height:36px;border:2px solid #2b3a55;cursor:pointer;
+    clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+  .sw.on{border-color:#fff}
+  #profEmbs{display:grid;grid-template-columns:repeat(6,46px);gap:8px;justify-content:center}
+  .embB{width:46px;height:46px;background:#101724;border:1px solid #2b3a55;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;padding:0}
+  .embB.on{border-color:#ffb454;background:#1d2a40}
 </style>
 </head>
 <body>
@@ -152,6 +179,7 @@
   <div class="eyebrow">Tactical Swarm Command</div>
   <h1 class="logo">MARINE<br><span>SWARM</span></h1>
   <div class="sub">Zone Command</div>
+  <button id="profChip" onclick="UI.profiles()"><canvas id="profChipEmb" width="36" height="36" style="width:18px;height:18px"></canvas><span id="profChipName">—</span></button>
   <div style="height:6px"></div>
   <button class="mbtn hot" onclick="UI.go('scrCampaign')">Campaign</button>
   <button class="mbtn" onclick="UI.go('scrSkirmish')">Skirmish</button>
@@ -193,8 +221,8 @@
 <div id="scrVersus" class="screen hidden">
   <h2 class="sh">Versus · Local 2P</h2>
   <div class="helptxt" style="text-align:center">
-    <b>P1 · COBALT</b> — touch the LEFT half, or mouse / <span class="keycap">WASD</span><br>
-    <b>P2 · CRIMSON</b> — touch the RIGHT half, or <span class="keycap">← ↑ ↓ →</span><br>
+    <b>P1</b> — touch the LEFT half, or mouse / <span class="keycap">WASD</span> · upgrades <span class="keycap">1</span>–<span class="keycap">4</span> · stim <span class="keycap">SPACE</span><br>
+    <b>P2</b> — touch the RIGHT half, or <span class="keycap">← ↑ ↓ →</span> · upgrades <span class="keycap">7</span>–<span class="keycap">0</span> · stim <span class="keycap">ENTER</span><br>
     <span style="color:#7f8ba3">Same screen. Two fingers. First force standing wins.</span>
   </div>
   <div class="row"><div class="lbl">Neutral bots</div><div class="row" id="vsBots"></div></div>
@@ -213,6 +241,31 @@
   <div id="ruleTip" class="hidden"></div>
 </div>
 
+<!-- PROFILES -->
+<div id="scrProfiles" class="screen hidden">
+  <h2 class="sh">Profiles</h2>
+  <div class="eyebrow">Local to this device — progress, rules &amp; setup per profile</div>
+  <div id="profList"></div>
+  <div class="row">
+    <button class="mbtn small" onclick="UI.profNew()">New</button>
+    <button class="mbtn small" onclick="UI.profEdit()">Edit</button>
+    <button class="mbtn small" id="btnProfDel" onclick="UI.profDel()">Delete</button>
+  </div>
+  <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
+</div>
+
+<!-- PROFILE EDIT -->
+<div id="scrProfEdit" class="screen hidden">
+  <h2 class="sh" id="profEditTitle">New Profile</h2>
+  <input id="profName" class="pfin" maxlength="12" autocomplete="off" spellcheck="false" placeholder="CALLSIGN">
+  <div class="lbl">Color</div>
+  <div class="row" id="profCols"></div>
+  <div class="lbl">Emblem</div>
+  <div id="profEmbs"></div>
+  <button class="mbtn hot" onclick="UI.profSave()">Save</button>
+  <button class="mbtn small" onclick="UI.profCancel()">Cancel</button>
+</div>
+
 <!-- HELP -->
 <div id="scrHelp" class="screen hidden">
   <h2 class="sh">Field Manual</h2>
@@ -221,6 +274,7 @@
     <b>BEACON PADS</b> — Stand on a pad to capture it. Owned pads mine minerals and deploy fresh marines automatically. The gold CORE pad mines double and deploys faster.<br><br>
     <b>GRID MAPS</b> — On the GRID skirmish map the whole field is tiled into cells. Stand on any cell to paint it your color; owned cells mine and reinforce like small pads. Erase every enemy cell to win.<br><br>
     <b>UPGRADES</b> — Spend minerals in the bottom tray (keys <span class="keycap">1</span>–<span class="keycap">7</span>): damage, fire rate, speed, range, armor, reinforce speed, supply cap.<br><br>
+    <b>STIMPACK</b> — Unlock the combat stim (key <span class="keycap">8</span>), then fire it with <span class="keycap">8</span> or <span class="keycap">SPACE</span>: every marine trades a slice of health (never fatal) for a burst of fire rate and speed.<br><br>
     <b>ABSORB</b> — Surround isolated enemies. Marines cut off and outnumbered may defect to your side when they fall.<br><br>
     <b>DEFEAT</b> — Lose every marine and every pad and you're out. Same goes for them.
   </div>
@@ -241,6 +295,7 @@
 
 <!-- END -->
 <div id="scrEnd" class="screen hidden">
+  <canvas id="endEmb" width="80" height="80" style="width:40px;height:40px"></canvas>
   <div class="bigend" id="endTitle">VICTORY</div>
   <div class="eyebrow" id="endSub"></div>
   <div id="endStats"></div>
@@ -287,6 +342,10 @@ const CFG = {
   convertR:64,                // absorb check radius
   gridPadEq:8,                // grid map: whole grid ≈ this many pads (income+spawn)
   cellCapMult:1.5,            // grid map: cells flip this much faster than pads
+  stimCost:300,               // one-time stimpack unlock price
+  stimHp:10,                  // hp each marine pays per stim (clamped, never lethal)
+  stimDur:8,                  // stim buff duration (s)
+  stimRof:1.5, stimSpd:1.4,   // stim fire-rate / move-speed multipliers
 };
 const UPGDEF = [
   {k:'dmg',name:'DAMAGE',   base:60,grow:1.62,max:8,d:'Weapon damage. +25% per level.'},
@@ -325,8 +384,8 @@ const RULEDEF=[
 ];
 const STAT = {
   dmg:t=>CFG.dmg*(1+.25*t.up.dmg)*S.rules.dmg,
-  rof:t=>CFG.rof/((1+.16*t.up.rof)*S.rules.rof),
-  spd:t=>CFG.spd*(1+.10*t.up.spd)*S.rules.spd,
+  rof:t=>CFG.rof/((1+.16*t.up.rof)*S.rules.rof*(t.stimT>0?CFG.stimRof:1)),
+  spd:t=>CFG.spd*(1+.10*t.up.spd)*S.rules.spd*(t.stimT>0?CFG.stimSpd:1),
   rng:t=>CFG.rng*(1+.08*t.up.rng)*S.rules.rng,
   hp: t=>CFG.hp *(1+.22*t.up.hp)*S.rules.hp,
   spw:t=>CFG.spw/((1+.15*t.up.spw)*S.rules.spw),
@@ -345,9 +404,9 @@ const DIFF={
   bot:   {react:2.2, inc:0.75, start:8,  pre:0},
 };
 const PERS={
-  rush:['dmg','rof','spd','hp','rng','spw','sup'],
-  eco: ['spw','sup','hp','dmg','rof','rng','spd'],
-  bal: ['dmg','spw','rof','sup','hp','spd','rng'],
+  rush:['dmg','rof','stim','spd','hp','rng','spw','sup'],
+  eco: ['spw','sup','hp','dmg','rof','stim','rng','spd'],
+  bal: ['dmg','spw','rof','stim','sup','hp','spd','rng'],
 };
 
 /* ---------- audio (procedural WebAudio) ---------- */
@@ -383,6 +442,7 @@ const AudioSys={ac:null,mg:null,on:true,nb:null,shots:0,
   cap(){ this.tone(520,660,.1,'square',.05); this.tone(660,880,.12,'square',.05,.09); },
   lostZone(){ this.tone(320,170,.22,'sawtooth',.06); },
   upg(){ this.tone(440,440,.06,'square',.05); this.tone(659,659,.08,'square',.05,.05); },
+  stim(){ this.noise(.18,.07,900,.9); this.tone(220,540,.22,'sawtooth',.06); },
   click(){ this.tone(950,700,.035,'square',.03); },
   win(){ [440,554,659,880].forEach((f,i)=>this.tone(f,f,.14,'square',.06,i*.11)); },
   lose(){ this.tone(300,300,.2,'sawtooth',.06); this.tone(210,150,.4,'sawtooth',.06,.18); },
@@ -422,6 +482,49 @@ function atlas(ci){
   ATLAS[ci]=c; return c;
 }
 
+/* ---------- emblems (procedural profile insignias) ---------- */
+const NEMB=12;
+function drawEmblem(g,e,x,y,r,color){
+  g.save(); g.translate(x,y); g.strokeStyle=color; g.fillStyle=color;
+  g.lineWidth=Math.max(1.1,r*.18); g.lineCap='round';
+  switch(((e|0)%NEMB+NEMB)%NEMB){
+    case 0:{g.beginPath(); for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;
+      const px=Math.cos(a)*rr,py=Math.sin(a)*rr; i?g.lineTo(px,py):g.moveTo(px,py);}
+      g.closePath(); g.fill(); break;}                                        // star
+    case 1: circ(g,0,-r*.18,r*.6); g.fillRect(-r*.32,r*.12,r*.64,r*.5);
+      g.fillStyle='rgba(0,0,0,.85)'; circ(g,-r*.24,-r*.24,r*.15); circ(g,r*.24,-r*.24,r*.15); break; // skull
+    case 2: g.lineWidth=r*.26;
+      g.beginPath(); g.moveTo(-r*.8,-r*.55); g.lineTo(0,0); g.lineTo(r*.8,-r*.55); g.stroke();
+      g.beginPath(); g.moveTo(-r*.8,r*.1); g.lineTo(0,r*.65); g.lineTo(r*.8,r*.1); g.stroke(); break; // chevron
+    case 3: g.beginPath(); g.moveTo(0,r*.5); g.lineTo(-r,-r*.5); g.lineTo(-r*.15,-r*.05); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(0,r*.5); g.lineTo(r,-r*.5); g.lineTo(r*.15,-r*.05); g.closePath(); g.fill(); break; // wings
+    case 4: g.beginPath(); g.moveTo(r*.25,-r); g.lineTo(-r*.45,r*.15); g.lineTo(-r*.02,r*.15);
+      g.lineTo(-r*.25,r); g.lineTo(r*.45,-r*.15); g.lineTo(r*.02,-r*.15); g.closePath(); g.fill(); break; // bolt
+    case 5: g.beginPath(); g.arc(0,0,r*.62,0,TAU); g.stroke(); circ(g,0,0,r*.16);
+      for(let i=0;i<4;i++){const a=i*Math.PI/2; g.beginPath();
+        g.moveTo(Math.cos(a)*r*.45,Math.sin(a)*r*.45); g.lineTo(Math.cos(a)*r,Math.sin(a)*r); g.stroke();} break; // crosshair
+    case 6: hexPath(g,0,0,r*.95); g.stroke(); circ(g,0,0,r*.3); break;        // hex
+    case 7: g.lineWidth=r*.22; for(let i=-1;i<=1;i++){g.beginPath();
+      g.moveTo(i*r*.5-r*.25,-r*.8); g.quadraticCurveTo(i*r*.5+r*.3,0,i*r*.5-r*.15,r*.8); g.stroke();} break; // claw
+    case 8: g.beginPath(); g.moveTo(0,-r); g.lineTo(r*.9,r*.75); g.lineTo(-r*.9,r*.75); g.closePath(); g.stroke();
+      g.beginPath(); g.moveTo(0,-r*.35); g.lineTo(r*.38,r*.42); g.lineTo(-r*.38,r*.42); g.closePath(); g.fill(); break; // delta
+    case 9: circ(g,0,0,r*.28); g.save(); g.rotate(-.5);
+      g.beginPath(); g.ellipse(0,0,r,r*.42,0,0,TAU); g.stroke(); g.restore();
+      circ(g,r*.62,-r*.55,r*.13); break;                                      // orbit
+    case 10: g.lineWidth=r*.3; g.beginPath(); g.moveTo(0,-r); g.lineTo(0,r); g.stroke();
+      g.beginPath(); g.moveTo(-r,0); g.lineTo(r,0); g.stroke(); break;        // cross
+    case 11: g.save(); g.rotate(Math.PI/4); g.strokeRect(-r*.62,-r*.62,r*1.24,r*1.24);
+      g.fillRect(-r*.28,-r*.28,r*.56,r*.56); g.restore(); break;              // diamond
+  }
+  g.restore();
+}
+function embCanvas(e,color,px){ // crisp mini-canvas for DOM chips/pickers
+  const c=document.createElement('canvas'); c.width=c.height=px*2;
+  c.style.width=c.style.height=px+'px';
+  drawEmblem(c.getContext('2d'),e,px,px,px*.8,color);
+  return c;
+}
+
 /* ---------- spatial grid ---------- */
 const GRID={cs:52,cw:0,ch:0,cells:[],
   init(w,h){this.cw=Math.ceil(w/this.cs);this.ch=Math.ceil(h/this.cs);
@@ -449,25 +552,66 @@ let unlocked=0, DBG=false, soundOn=true;
 const SK={foes:2,diff:'normal',map:'open'};
 const VS={bots:0};
 
-/* ---------- persistence (localStorage, best-effort) ---------- */
-const SAVE_KEY='ms_save_v1';
+/* ---------- profiles & persistence (localStorage, best-effort) ----------
+   A profile is a local per-device identity: name + color + emblem plus that
+   player's campaign progress, battle rules and match setup. No account, no
+   login (see CONTEXT.md "Profile"). The sound toggle stays device-global.
+   `unlocked`/RULES/SK/VS remain the *working* globals: applyProfile() loads
+   the active profile into them, stashProfile() writes them back. */
+const SAVE_KEY='ms_save_v2', SAVE_KEY_V1='ms_save_v1', MAXPROF=8;
+function mkProfile(name,col,emb){
+  return {name:name||'COMMANDER',col:col||0,emb:emb||0,unlocked:0,
+    rules:{...RULE_DEFAULT},sk:{foes:2,diff:'normal',map:'open'},vs:{bots:0}};
+}
+const PROFILES={list:[mkProfile()],active:0};
+const prof=()=>PROFILES.list[PROFILES.active];
+function applyProfile(){const p=prof();
+  unlocked=p.unlocked; Object.assign(RULES,RULE_DEFAULT,p.rules);
+  Object.assign(SK,p.sk); Object.assign(VS,p.vs);}
+function stashProfile(){const p=prof();
+  p.unlocked=unlocked; p.rules={...RULES}; p.sk={...SK}; p.vs={...VS};}
+function validProfile(d){
+  if(!d||typeof d!=='object')return null;
+  const p=mkProfile();
+  if(typeof d.name==='string'&&d.name.trim())p.name=d.name.trim().toUpperCase().slice(0,12);
+  if(Number.isInteger(d.col)&&d.col>=0&&d.col<PALETTE.length)p.col=d.col;
+  if(Number.isInteger(d.emb)&&d.emb>=0&&d.emb<NEMB)p.emb=d.emb;
+  if(Number.isInteger(d.unlocked))p.unlocked=clamp(d.unlocked,0,MISSIONS.length);
+  if(d.rules&&typeof d.rules==='object')
+    for(const rd of RULEDEF) if(rd.vals.includes(d.rules[rd.k])) p.rules[rd.k]=d.rules[rd.k];
+  if(d.sk&&typeof d.sk==='object'){
+    if([1,2,3,4,5].includes(d.sk.foes))p.sk.foes=d.sk.foes;
+    if(DIFF[d.sk.diff]&&d.sk.diff!=='bot')p.sk.diff=d.sk.diff;
+    if(['open','corridors','scatter','grid'].includes(d.sk.map))p.sk.map=d.sk.map;
+  }
+  if(d.vs&&typeof d.vs==='object'&&[0,1].includes(d.vs.bots))p.vs.bots=d.vs.bots;
+  return p;
+}
 function saveState(){
+  stashProfile();
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(
-    {unlocked,sound:soundOn,rules:RULES,sk:SK,vs:VS}));}catch(e){}
+    {profiles:PROFILES.list,active:PROFILES.active,sound:soundOn}));}catch(e){}
 }
 function loadState(){
   let d=null; try{d=JSON.parse(localStorage.getItem(SAVE_KEY));}catch(e){}
-  if(!d||typeof d!=='object')return;
-  if(Number.isInteger(d.unlocked))unlocked=clamp(d.unlocked,0,MISSIONS.length);
-  if(typeof d.sound==='boolean'){soundOn=d.sound;AudioSys.on=soundOn;}
-  if(d.rules&&typeof d.rules==='object')
-    for(const rd of RULEDEF) if(rd.vals.includes(d.rules[rd.k])) RULES[rd.k]=d.rules[rd.k];
-  if(d.sk&&typeof d.sk==='object'){
-    if([1,2,3,4,5].includes(d.sk.foes))SK.foes=d.sk.foes;
-    if(DIFF[d.sk.diff])SK.diff=d.sk.diff;
-    if(['open','corridors','scatter','grid'].includes(d.sk.map))SK.map=d.sk.map;
+  if(d&&typeof d==='object'&&Array.isArray(d.profiles)){
+    const list=d.profiles.slice(0,MAXPROF).map(validProfile).filter(Boolean);
+    if(list.length){PROFILES.list=list;
+      PROFILES.active=(Number.isInteger(d.active)&&d.active>=0&&d.active<list.length)?d.active:0;}
+    if(typeof d.sound==='boolean'){soundOn=d.sound;AudioSys.on=soundOn;}
+  } else {
+    /* one-time migration: v1 blob becomes the first profile */
+    let v1=null; try{v1=JSON.parse(localStorage.getItem(SAVE_KEY_V1));}catch(e){}
+    if(v1&&typeof v1==='object'){
+      const p=validProfile({name:'COMMANDER',unlocked:v1.unlocked,
+        rules:v1.rules,sk:v1.sk,vs:v1.vs});
+      if(p)PROFILES.list=[p];
+      if(typeof v1.sound==='boolean'){soundOn=v1.sound;AudioSys.on=soundOn;}
+      try{localStorage.removeItem(SAVE_KEY_V1);}catch(e){}
+      applyProfile(); saveState(); return; // persist v2 now: v1 is gone
+    }
   }
-  if(d.vs&&typeof d.vs==='object'&&[0,1].includes(d.vs.bots))VS.bots=d.vs.bots;
+  applyProfile();
 }
 
 /* ---------- map / mission definitions (normalized coords) ---------- */
@@ -489,6 +633,8 @@ const MISSIONS=[
  {t:'GOLD RUSH', b:'The core pad at center mines double and deploys fast. Everyone wants it. Take it first, keep it forever.',
   z:[{x:.12,y:.5},{x:.88,y:.18},{x:.88,y:.82},{x:.5,y:.5,big:1},{x:.5,y:.12},{x:.5,y:.88}], p:{z:0,n:12},
   f:[{z:1,d:'normal',n:10,c:1,pr:'rush'},{z:2,d:'normal',n:10,c:3,pr:'eco'}], obj:{t:'elim'}},
+ {t:'SECTOR PAINT', b:'New doctrine from command: this sector is gridded into control cells. Stand on a cell to paint it — every cell you hold mines and reinforces. Spread wide, hold the middle, erase them.',
+  grid:1, p:{n:12}, f:[{d:'normal',n:10,c:1,pr:'bal'}], obj:{t:'elim'}},
  {t:'HOLD THE LINE', b:'A brutal warband owns the sector and it is coming for you. Reinforcements arrive in three minutes. Survive.',
   z:[{x:.16,y:.5},{x:.84,y:.5},{x:.38,y:.5},{x:.62,y:.28},{x:.62,y:.72}], p:{z:0,n:16},
   f:[{z:1,d:'brutal',n:16,c:1,pr:'rush',own:[3,4]}], obj:{t:'survive'}, time:180},
@@ -498,6 +644,8 @@ const MISSIONS=[
  {t:'TRIPLE THREAT', b:'Dropped dead-center with three warbands closing in. Expand fast, pick a flank, break out.',
   z:[{x:.5,y:.5},{x:.12,y:.16},{x:.88,y:.16},{x:.5,y:.9},{x:.3,y:.36},{x:.7,y:.36},{x:.5,y:.7}], p:{z:0,n:14},
   f:[{z:1,d:'hard',n:11,c:1,pr:'rush'},{z:2,d:'hard',n:11,c:3,pr:'eco'},{z:3,d:'hard',n:11,c:4,pr:'bal'}], obj:{t:'elim'}},
+ {t:'RECLAMATION', b:'The grid sector has fallen. Two warbands have carved up the board and its mines are feeding their war machine. You get one cell and a squad. Take it all back.',
+  grid:1, foesOwn:.66, p:{n:14}, f:[{d:'hard',n:12,c:1,pr:'rush'},{d:'hard',n:12,c:3,pr:'eco'}], obj:{t:'elim'}},
  {t:'WARLORD', b:'The Warlord fields veteran troops with upgraded arms, flanked by two loyal packs. End this campaign. No retreat.',
   z:[{x:.12,y:.5},{x:.88,y:.5},{x:.88,y:.14},{x:.88,y:.86},{x:.42,y:.3},{x:.42,y:.7},{x:.62,y:.5}], p:{z:0,n:14},
   f:[{z:1,d:'brutal',n:20,c:1,pr:'rush',pre:{dmg:1,rof:1,hp:1}},
@@ -509,14 +657,50 @@ function mapDims(){const cw=window.innerWidth||900, ch=window.innerHeight||600;
   S.mapH=1000; S.mapW=clamp(Math.round(1000*cw/Math.max(1,ch)),640,1900);}
 function farApart(list,x,y,min){return list.every(z=>{const dx=z.x-x,dy=z.y-y;return dx*dx+dy*dy>min*min})}
 
+/* team colors: the human takes the profile color; scripted/default colors
+   that collide are remapped to the first unused palette color */
+function colAlloc(){const used=new Set();
+  return w=>{let c=((w==null?0:w)%PALETTE.length+PALETTE.length)%PALETTE.length;
+    if(used.has(c)){c=0; while(used.has(c)&&c<PALETTE.length-1)c++;}
+    used.add(c); return c;};}
 function buildMissionDef(i){
   const m=MISSIONS[i]; mapDims();
+  if(m.grid) return buildGridMissionDef(i,m);
   const zones=m.z.map(z=>({x:z.x*S.mapW,y:z.y*S.mapH,big:!!z.big}));
   const walls=(m.w||[]).map(w=>({x:w.x*S.mapW,y:w.y*S.mapH,w:w.w*S.mapW,h:w.h*S.mapH}));
-  const teams=[{col:0,human:true,zone:m.p.z,n:m.p.n}];
-  for(const f of m.f) teams.push({col:f.c,human:false,zone:f.z,n:f.n,diff:f.d,pers:f.pr,own:f.own||[],pre:f.pre||null});
+  const al=colAlloc();
+  const teams=[{col:al(prof().col),human:true,zone:m.p.z,n:m.p.n}];
+  for(const f of m.f) teams.push({col:al(f.c),human:false,zone:f.z,n:f.n,diff:f.d,pers:f.pr,own:f.own||[],pre:f.pre||null});
   return {kind:'mission',mIdx:i,zones,walls,teams,obj:m.obj,time:m.time||0,title:m.t,
     rules:{...RULE_DEFAULT}};
+}
+/* grid campaign missions: same cell tiling as skirmish grid (ADR 0001).
+   Player home = left-middle cell, foes on the right column. m.foesOwn is a
+   fraction of the board width (from the right) the foes pre-own, split
+   top/bottom between them — cell indices depend on aspect, so the region
+   is computed here, not stored in the mission def. */
+function buildGridMissionDef(i,m){
+  const gw=clamp(Math.round(S.mapW/200),5,9), gh=5;
+  const cw=S.mapW/gw, ch=S.mapH/gh;
+  const zones=[];
+  for(let gy=0;gy<gh;gy++) for(let gx=0;gx<gw;gx++)
+    zones.push({x:(gx+.5)*cw,y:(gy+.5)*ch,big:false,cell:true});
+  const at=(gx,gy)=>gy*gw+gx, midY=(gh/2)|0, al=colAlloc();
+  const teams=[{col:al(prof().col),human:true,zone:at(0,midY),n:m.p.n}];
+  m.f.forEach((f,fi)=>{
+    const gy=m.f.length===1?midY:(fi===0?1:gh-2);
+    teams.push({col:al(f.c),human:false,zone:at(gw-1,gy),n:f.n,diff:f.d,pers:f.pr,
+      own:[],pre:f.pre||null});
+  });
+  if(m.foesOwn){
+    const gx0=Math.round(gw*(1-m.foesOwn));
+    for(let gy=0;gy<gh;gy++) for(let gx=gx0;gx<gw;gx++){
+      const ti=(m.f.length>1&&gy*2>=gh)?2:1;
+      teams[Math.min(ti,teams.length-1)].own.push(at(gx,gy));
+    }
+  }
+  return {kind:'mission',mIdx:i,zones,walls:[],teams,obj:m.obj,time:m.time||0,
+    title:m.t,grid:{gw,gh},rules:{...RULE_DEFAULT}};
 }
 function buildSkirmishDef(foes,diff,map,demo){
   mapDims(); const k=foes+1, zones=[], walls=[], teams=[];
@@ -535,10 +719,10 @@ function buildSkirmishDef(foes,diff,map,demo){
       while(taken.has(zi)) zi=(zi+1)%(gw*gh);
       taken.add(zi); homeCell.push(zi);
     }
-    const d=DIFF[diff], per=['rush','eco','bal'];
+    const d=DIFF[diff], per=['rush','eco','bal'], al=colAlloc();
     const st=demo?d.start:RULES.start;
-    teams.push({col:0,human:!demo,zone:homeCell[0],n:st,diff:demo?diff:null,pers:'bal'});
-    for(let i=1;i<k;i++) teams.push({col:i%(PALETTE.length),human:false,zone:homeCell[i],n:st,diff,pers:per[i%3]});
+    teams.push({col:al(demo?0:prof().col),human:!demo,zone:homeCell[0],n:st,diff:demo?diff:null,pers:'bal'});
+    for(let i=1;i<k;i++) teams.push({col:al(i),human:false,zone:homeCell[i],n:st,diff,pers:per[i%3]});
     return {kind:demo?'demo':'skirmish',zones,walls,teams,obj:{t:'elim'},time:0,title:'SKIRMISH',
       grid:{gw,gh},rules:demo?{...RULE_DEFAULT}:{...RULES}};
   }
@@ -558,10 +742,10 @@ function buildSkirmishDef(foes,diff,map,demo){
   }
   for(const n of neutrals){const nx=n.x*S.mapW,ny=n.y*S.mapH;
     if(farApart(zones,nx,ny,140)) zones.push({x:nx,y:ny,big:!!n.big});}
-  const d=DIFF[diff], per=['rush','eco','bal'];
+  const d=DIFF[diff], per=['rush','eco','bal'], al=colAlloc();
   const st=demo?d.start:RULES.start;
-  teams.push({col:0,human:!demo,zone:0,n:st,diff:demo?diff:null,pers:'bal'});
-  for(let i=1;i<k;i++) teams.push({col:i%(PALETTE.length),human:false,zone:i,n:st,diff,pers:per[i%3]});
+  teams.push({col:al(demo?0:prof().col),human:!demo,zone:0,n:st,diff:demo?diff:null,pers:'bal'});
+  for(let i=1;i<k;i++) teams.push({col:al(i),human:false,zone:i,n:st,diff,pers:per[i%3]});
   return {kind:demo?'demo':'skirmish',zones,walls,teams,obj:{t:'elim'},time:0,title:'SKIRMISH',
     rules:demo?{...RULE_DEFAULT}:{...RULES}};
 }
@@ -569,11 +753,11 @@ function buildVersusDef(bots){
   mapDims(); const zones=[{x:.1*S.mapW,y:.5*S.mapH},{x:.9*S.mapW,y:.5*S.mapH},
     {x:.5*S.mapW,y:.5*S.mapH,big:true},{x:.3*S.mapW,y:.3*S.mapH},{x:.7*S.mapW,y:.3*S.mapH},
     {x:.3*S.mapW,y:.7*S.mapH},{x:.7*S.mapW,y:.7*S.mapH}];
-  const st=RULES.start;
-  const teams=[{col:0,human:true,zone:0,n:st},{col:1,human:true,zone:1,n:st}];
+  const st=RULES.start, al=colAlloc();
+  const teams=[{col:al(prof().col),human:true,zone:0,n:st},{col:al(1),human:true,zone:1,n:st}];
   if(bots){ zones.push({x:.5*S.mapW,y:.09*S.mapH},{x:.5*S.mapW,y:.91*S.mapH});
-    teams.push({col:2,human:false,zone:zones.length-2,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'eco'});
-    teams.push({col:3,human:false,zone:zones.length-1,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'rush'});}
+    teams.push({col:al(2),human:false,zone:zones.length-2,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'eco'});
+    teams.push({col:al(3),human:false,zone:zones.length-1,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'rush'});}
   return {kind:'versus',zones,walls:[],teams,obj:{t:'elim'},time:0,title:'VERSUS',rules:{...RULES}};
 }
 
@@ -599,6 +783,7 @@ function newGame(def){
   def.teams.forEach((td,i)=>{
     const T={id:i,col:td.col,human:!!td.human,min:S.demo?40:30,mined:0,kills:0,losses:0,
       up:{dmg:0,rof:0,spd:0,rng:0,hp:0,spw:0,sup:0},alive:true,hold:false,
+      stimOwn:false,stimT:0,
       cp:{x:0,y:0},diff:td.diff||null,pers:td.pers||'bal',
       ai:td.human?null:{t:rnd(.3,1.2)}};
     if(td.pre) for(const k in td.pre) T.up[k]=td.pre[k];
@@ -606,7 +791,7 @@ function newGame(def){
       for(let p=0;p<d.pre;p++) T.up[order[p%order.length]]++;}
     S.teams.push(T);
     if(T.human) S.humans.push(i);
-    const hz=S.zones[td.zone]; hz.owner=i; hz.prog=1;
+    const hz=S.zones[td.zone]; hz.owner=i; hz.prog=1; hz.homeOf=i;
     T.cp.x=hz.x; T.cp.y=hz.y;
     (td.own||[]).forEach(zi=>{S.zones[zi].owner=i;S.zones[zi].prog=1;});
     for(let u=0;u<td.n;u++){const a=u/td.n*TAU;
@@ -639,6 +824,27 @@ function buyUpg(ti,k){
   if(T.human){AudioSys.upg(); refreshHUD(true);}
   return true;
 }
+function buyStim(ti){
+  const T=S.teams[ti]; if(!T||!T.alive||T.stimOwn||T.min<CFG.stimCost) return false;
+  T.min-=CFG.stimCost; T.stimOwn=true;
+  if(T.human){AudioSys.upg(); refreshHUD(true); if(!S.demo)toast('STIMPACK ONLINE',PALETTE[T.col].main);}
+  return true;
+}
+function doStim(ti){
+  const T=S.teams[ti]; if(!T||!T.alive||!T.stimOwn||T.stimT>0) return false;
+  T.stimT=CFG.stimDur;
+  const C=PALETTE[T.col];
+  for(const u of S.units) if(u.team===ti&&!u.dead){
+    u.hp=Math.max(1,u.hp-CFG.stimHp);
+    part(2,u.x+rnd(-3,3),u.y+rnd(-3,3),'#ff6a5e');
+  }
+  part(3,S.ts[ti].cx,S.ts[ti].cy,'#ff6a5e',14,60);
+  if(T.human){AudioSys.stim(); refreshHUD(true);}
+  return true;
+}
+/* hotkey / button action: unlock first, activate after */
+function stimAct(ti){ const T=S.teams[ti]; if(!T) return false;
+  return T.stimOwn?doStim(ti):buyStim(ti); }
 
 /* ---------- particles / fx ---------- */
 function part(t,x,y,c,a,b){ // t:1 pixel 2 spark 3 ring 4 corpse 5 muzzle
@@ -830,6 +1036,16 @@ function aiThink(T,dt){
   A.t=d.react*rnd(.8,1.25);
   const me=S.ts[T.id], nt=S.teams.length;
   if(me.n===0) return;
+  // stim when a real fight is starting and the army can afford the hp
+  if(T.stimOwn&&T.stimT<=0){
+    let near=0; GRID.each(me.cx,me.cy,170,o=>{
+      if(!o.dead&&o.team!==T.id&&++near>=5) return true; return false;});
+    if(near>=5){
+      let hp=0,mhp=0;
+      for(const u of S.units) if(u.team===T.id&&!u.dead){hp+=u.hp;mhp+=u.mhp;}
+      if(mhp>0&&hp/mhp>.5) doStim(T.id);
+    }
+  }
   // defend owned pads under threat
   let def=null,defScore=0;
   for(let zi=0;zi<S.zones.length;zi++){const Z=S.zones[zi];
@@ -858,7 +1074,13 @@ function buyPass(T,d){
   const order=PERS[T.pers]||PERS.bal;
   let buys=0;
   for(let i=0;i<order.length&&buys<2;i++){
-    const k=order[i], u=UPGDEF.find(o=>o.k===k);
+    const k=order[i];
+    if(k==='stim'){ // easy AI & versus filler bots never tech to stim
+      if(T.stimOwn||T.diff==='easy'||T.diff==='bot') continue;
+      if(T.min>=CFG.stimCost*1.1&&buyStim(T.id)){ buys++; continue; }
+      break; // save up for stim instead of draining into lower priorities
+    }
+    const u=UPGDEF.find(o=>o.k===k);
     if(T.up[k]>=u.max) continue;
     if(T.min>=upgCost(u,T.up[k])*1.1){ if(buyUpg(T.id,k)) buys++; }
   }
@@ -902,6 +1124,8 @@ function checkEnd(){
 function endGame(win,title,sub){
   if(S.over) return; S.over=true;
   const P=S.teams[S.humans[0]||0];
+  const ec=$('endEmb'),eg=ec.getContext('2d'); eg.clearRect(0,0,80,80);
+  if(S.mode!=='versus')drawEmblem(eg,prof().emb,40,40,30,PALETTE[P.col].main);
   $('endTitle').textContent=title; $('endTitle').className='bigend '+(win?'win':'lose');
   $('endSub').textContent=sub||'';
   $('endStats').innerHTML='TIME '+fmtT(S.time)+' &nbsp;·&nbsp; KILLS '+P.kills+
@@ -929,6 +1153,7 @@ function update(dt){
   S.time+=dt;
   AudioSys.shots=0; // per-tick gunfire-audio budget (see AudioSys.shot)
   if(S.def&&S.def.time) S.timeLeft=Math.max(0,S.def.time-S.time);
+  for(const T of S.teams) if(T.stimT>0) T.stimT=Math.max(0,T.stimT-dt);
   moveKeyCp(dt);
   statsPass();
   for(const T of S.teams) if(T.ai&&T.alive) aiThink(T,dt);
@@ -995,6 +1220,9 @@ function drawZone(g,Z,t){
     if(C&&Z.prog>0&&Z.prog<1){ // flip progress along the cell's bottom edge
       g.fillStyle='rgba('+C.rgb+',0.75)';
       g.fillRect(Z.x-hw+3,Z.y+hh-6,(G.cw-6)*Z.prog,3);}
+    if(S.humans.length&&Z.homeOf===S.humans[0]&&Z.owner===Z.homeOf)
+      drawEmblem(g,prof().emb,Z.x,Z.y,Math.min(G.cw,G.ch)*.22,
+        'rgba('+PALETTE[S.teams[Z.homeOf].col].rgb+',0.3)');
     return;
   }
   const base=C?C.main:'#5b6a80';
@@ -1016,6 +1244,8 @@ function drawZone(g,Z,t){
   const s=Z.big?9:7; g.fillRect(-s/2,-s/2,s,s); g.restore();
   if(Z.big){g.strokeStyle='rgba(255,180,84,.8)';g.lineWidth=2;
     g.beginPath();g.arc(Z.x,Z.y,14,0,TAU);g.stroke();}
+  if(S.humans.length&&Z.homeOf===S.humans[0]&&Z.owner===Z.homeOf)
+    drawEmblem(g,prof().emb,Z.x,Z.y,Z.r*.42,'rgba('+PALETTE[S.teams[Z.homeOf].col].rgb+',0.26)');
 }
 function render(){
   const t=performance.now()/1000;
@@ -1038,6 +1268,8 @@ function render(){
     const fr=moving?1+(Math.floor(u.anim)%2):0;
     const ai=angIdx(u.ang);
     ctx.drawImage(A,ai*CELL,fr*CELL,CELL,CELL,u.x-CELL/2,u.y-CELL/2,CELL,CELL);
+    if(T.stimT>0){ctx.globalAlpha=.16+.06*Math.sin(t*14);ctx.fillStyle='#ff5040';
+      ctx.beginPath();ctx.arc(u.x,u.y,9,0,TAU);ctx.fill();ctx.globalAlpha=1;}
     if(u.hf>0){ctx.globalAlpha=Math.min(.8,u.hf*7);ctx.fillStyle='#fff';
       ctx.beginPath();ctx.arc(u.x,u.y,8,0,TAU);ctx.fill();ctx.globalAlpha=1;}
     if(u.hp<u.mhp){const w=14,f=Math.max(0,u.hp/u.mhp);
@@ -1076,6 +1308,8 @@ function drawBeacon(g,T,t){
   for(let i=0;i<3;i++){const a=t*2.4+i*TAU/3;
     g.beginPath(); g.arc(p.x,p.y,r,a,a+TAU/4.5); g.stroke();}
   g.fillStyle=C.main; g.beginPath(); g.arc(p.x,p.y,3,0,TAU); g.fill();
+  if(T.id===S.humans[0]&&!S.demo)
+    drawEmblem(g,prof().emb,p.x,p.y-r-12,7,'rgba('+C.rgb+',.8)');
 }
 let fpsA=0,fpsN=0,fpsShow=0,fpsT=0;
 function drawDebug(){
@@ -1112,6 +1346,15 @@ function showUpgTip(u,ti){
   $('upgTip').classList.remove('hidden');
 }
 function hideUpgTip(){$('upgTip').classList.add('hidden');}
+function showStimTip(ti){
+  const T=S.teams[ti]; if(!T) return;
+  const st=!T.stimOwn?('LOCKED · '+CFG.stimCost+'◈ TO UNLOCK')
+    :(T.stimT>0?('ACTIVE · '+Math.ceil(T.stimT)+'s LEFT'):'READY');
+  $('upgTip').innerHTML='<b>STIMPACK</b> — Combat stim. Every marine pays '+CFG.stimHp+
+    ' HP (never fatal) for +50% fire rate and +40% speed, '+CFG.stimDur+'s. No re-stim while active.'+
+    '<br><span class="vals">'+st+'</span>';
+  $('upgTip').classList.remove('hidden');
+}
 function showRuleTip(rd){
   const fmt=v=>rd.x?('×'+v):(''+v);
   $('ruleTip').innerHTML='<b>'+rd.name+'</b> — '+rd.d+
@@ -1131,6 +1374,25 @@ function wireUb(b,u,teamFn){
   b.addEventListener('pointerleave',()=>done(false));
   b.addEventListener('pointercancel',()=>done(false));
 }
+function wireStim(b,teamFn){
+  let hT=null, held=false;
+  b.addEventListener('pointerdown',e=>{e.stopPropagation();AudioSys.init();held=false;
+    hT=setTimeout(()=>{held=true;showStimTip(teamFn());},420);});
+  const act=go=>{clearTimeout(hT);
+    if(held)hideUpgTip();
+    else if(go&&stimAct(teamFn()))AudioSys.click();
+    held=false;};
+  b.addEventListener('pointerup',()=>act(true));
+  b.addEventListener('pointerleave',()=>act(false));
+  b.addEventListener('pointercancel',()=>act(false));
+}
+const VS_UPGS=['dmg','rof','spd','spw'];
+function mkUb(u,hk){
+  const b=document.createElement('button'); b.className='ub';
+  b.innerHTML='<b>'+u.name+'</b><span class="pip"></span><em></em>'+
+    (hk?'<i class="hk">'+hk+'</i>':'');
+  return b;
+}
 function buildTrays(){
   const tray=$('tray'), L=$('trayL'), R=$('trayR');
   tray.innerHTML=''; L.innerHTML=''; R.innerHTML=''; trayBtns=[];
@@ -1138,26 +1400,36 @@ function buildTrays(){
   tray.classList.toggle('hidden',versus||S.demo);
   L.classList.toggle('hidden',!versus); R.classList.toggle('hidden',!versus);
   if(S.demo) return;
+  const addStim=(cont,teamFn,hk)=>{
+    const b=mkUb({name:'STIMPACK'},hk);
+    wireStim(b,teamFn);
+    cont.appendChild(b); trayBtns.push({b,stim:true,team:teamFn});
+  };
   if(!versus){
     UPGDEF.forEach((u,i)=>{
-      const b=document.createElement('button'); b.className='ub';
-      b.innerHTML='<b>'+u.name+'</b><span class="pip"></span><em></em>';
+      const b=mkUb(u,''+(i+1));
       wireUb(b,u,()=>S.humans[0]??0);
       tray.appendChild(b); trayBtns.push({b,u,team:()=>S.humans[0]??0});
     });
+    addStim(tray,()=>S.humans[0]??0,'8·␣');
   } else {
-    const mk=(cont,ti,label)=>{
+    const mk=(cont,ti,label,hks,stimHk)=>{
+      if(ti===S.humans[0]){ // P1 carries the device profile's emblem
+        const ec=embCanvas(prof().emb,PALETTE[S.teams[ti].col].main,14);
+        ec.style.margin='0 auto'; cont.appendChild(ec);
+      }
       const h=document.createElement('div'); h.className='phead';
       h.style.color=PALETTE[S.teams[ti].col].main; cont.appendChild(h);
-      ['dmg','rof','spd','spw'].forEach(k=>{
+      VS_UPGS.forEach((k,i)=>{
         const u=UPGDEF.find(o=>o.k===k);
-        const b=document.createElement('button'); b.className='ub';
-        b.innerHTML='<b>'+u.name+'</b><span class="pip"></span><em></em>';
+        const b=mkUb(u,hks[i]);
         wireUb(b,u,()=>ti);
         cont.appendChild(b); trayBtns.push({b,u,team:()=>ti,head:h,label});
       });
+      addStim(cont,()=>ti,stimHk);
     };
-    mk(L,S.humans[0],'P1'); mk(R,S.humans[1],'P2');
+    mk(L,S.humans[0],'P1',['1','2','3','4'],'␣');
+    mk(R,S.humans[1],'P2',['7','8','9','0'],'⏎');
   }
 }
 function refreshHUD(force){
@@ -1173,6 +1445,23 @@ function refreshHUD(force){
   $('objVal').textContent=o;
   const heads={};
   for(const tb of trayBtns){
+    if(tb.stim){
+      const T=S.teams[tb.team()], pip=tb.b.querySelector('.pip'), em=tb.b.querySelector('em');
+      if(!T.stimOwn){
+        pip.textContent='UNLOCK'; em.textContent=CFG.stimCost+'◈';
+        tb.b.classList.toggle('no',T.min<CFG.stimCost);
+        tb.b.classList.remove('rdy');
+      } else if(T.stimT>0){
+        const f=Math.ceil(T.stimT/CFG.stimDur*8);
+        pip.textContent='▮'.repeat(f)+'▯'.repeat(8-f);
+        em.textContent=Math.ceil(T.stimT)+'s';
+        tb.b.classList.remove('no','rdy');
+      } else {
+        pip.textContent='▮▮▮▮▮▮▮▮'; em.textContent='READY';
+        tb.b.classList.remove('no'); tb.b.classList.add('rdy');
+      }
+      continue;
+    }
     const T=S.teams[tb.team()], lvl=T.up[tb.u.k], maxed=lvl>=tb.u.max;
     const c=maxed?0:upgCost(tb.u,lvl);
     tb.b.querySelector('.pip').textContent='▮'.repeat(lvl)+'▯'.repeat(tb.u.max-lvl);
@@ -1220,9 +1509,20 @@ cv.addEventListener('pointercancel',ptrUp);
 window.addEventListener('contextmenu',e=>e.preventDefault());
 window.addEventListener('keydown',e=>{
   keys[e.key]=true;
-  if(S.mode==='menu')return;
-  if(e.key>='1'&&e.key<='7'&&S.mode!=='versus'&&!S.demo)
-    buyUpg(S.humans[0]??0,UPGDEF[+e.key-1].k);
+  if(S.mode==='menu')return; // menu screens may have text inputs — don't eat keys
+  if(e.key===' ')e.preventDefault();
+  if(!S.demo&&!S.over&&!S.paused&&!e.repeat){
+    if(S.mode!=='versus'){
+      if(e.key>='1'&&e.key<='7') buyUpg(S.humans[0]??0,UPGDEF[+e.key-1].k);
+      if(e.key==='8'||e.key===' ') stimAct(S.humans[0]??0);
+    } else {
+      const i1='1234'.indexOf(e.key), i2='7890'.indexOf(e.key);
+      if(i1>=0) buyUpg(S.humans[0],VS_UPGS[i1]);
+      if(i2>=0&&S.humans[1]!=null) buyUpg(S.humans[1],VS_UPGS[i2]);
+      if(e.key===' ') stimAct(S.humans[0]);
+      if(e.key==='Enter'&&S.humans[1]!=null) stimAct(S.humans[1]);
+    }
+  }
   if(e.key==='p'||e.key==='P'||e.key==='Escape'){
     if(!S.over&&!S.demo){S.paused?UI.resume():UI.pause();}}
   if(e.key==='`')UI.toggleDebug();
@@ -1241,7 +1541,7 @@ function moveKeyCp(dt){
 }
 
 /* ---------- UI / screens ---------- */
-const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules'];
+const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrProfiles','scrProfEdit'];
 let briefIdx=0, rulesFrom='scrSkirmish';
 const UI={
   show(id){for(const s of SCREENS)$(s).classList.toggle('hidden',s!==id);},
@@ -1255,7 +1555,7 @@ const UI={
     $('briefNum').textContent='MISSION '+String(i+1).padStart(2,'0');
     $('briefTitle').textContent=MISSIONS[i].t;
     $('briefText').textContent=MISSIONS[i].b;
-    let o=OBJTXT(MISSIONS[i].obj);
+    let o=(MISSIONS[i].grid?'▦ GRID — ':'')+OBJTXT(MISSIONS[i].obj);
     if(MISSIONS[i].time)o+=' — '+fmtT(MISSIONS[i].time);
     $('briefObj').textContent='OBJECTIVE: '+o;
     this.show('scrBrief');},
@@ -1278,6 +1578,31 @@ const UI={
     if(soundOn)AudioSys.click();},
   toggleDebug(){DBG=!DBG;$('btnDebugP').textContent='Debug: '+(DBG?'On':'Off');},
   rules(from){AudioSys.init();AudioSys.click();rulesFrom=from;buildRules();this.show('scrRules');},
+  profiles(){AudioSys.init();AudioSys.click();buildProfiles();this.show('scrProfiles');},
+  profNew(){AudioSys.click();
+    if(PROFILES.list.length>=MAXPROF){toast('PROFILE LIMIT REACHED');return;}
+    openProfEdit(mkProfile('COMMANDER '+(PROFILES.list.length+1)),true);},
+  profEdit(){AudioSys.click();const p=prof();
+    openProfEdit({name:p.name,col:p.col,emb:p.emb},false);},
+  profDel(){if(PROFILES.list.length<=1)return;
+    AudioSys.click();
+    const del=$('btnProfDel');
+    if(!profDelArm){profDelArm=true;del.textContent='Really?';return;}
+    PROFILES.list.splice(PROFILES.active,1); PROFILES.active=0;
+    applyProfile(); buildSetups(); saveState(); syncProfChip(); buildProfiles();},
+  profSave(){AudioSys.click();
+    const name=($('profName').value||'').trim().toUpperCase().slice(0,12)||'COMMANDER';
+    if(profEditIdx<0){
+      stashProfile();
+      const p=mkProfile(name,profDraft.col,profDraft.emb);
+      PROFILES.list.push(p); PROFILES.active=PROFILES.list.length-1;
+      applyProfile(); buildSetups();
+    } else {
+      const p=PROFILES.list[profEditIdx];
+      p.name=name; p.col=profDraft.col; p.emb=profDraft.emb;
+    }
+    saveState(); syncProfChip(); buildProfiles(); this.show('scrProfiles');},
+  profCancel(){AudioSys.click();buildProfiles();this.show('scrProfiles');},
   rulesDone(){AudioSys.click();hideRuleTip();this.show(rulesFrom);},
   rulesReset(){AudioSys.click();Object.assign(RULES,RULE_DEFAULT);buildRules();saveState();},
   stats(){AudioSys.click();
@@ -1307,10 +1632,70 @@ function buildCampaign(){
     c.className='card'+(lock?' lock':'')+(i<unlocked?' done':'');
     c.innerHTML='<div class="n">'+(lock?'🔒 ':'')+'M'+String(i+1).padStart(2,'0')+
       (i<unlocked?' · CLEAR':'')+'</div><div class="t">'+m.t+'</div>'+
-      '<div class="s">'+OBJTXT(m.obj)+(m.time?' · '+fmtT(m.time):'')+'</div>';
+      '<div class="s">'+(m.grid?'▦ GRID · ':'')+OBJTXT(m.obj)+(m.time?' · '+fmtT(m.time):'')+'</div>';
     if(!lock)c.addEventListener('click',()=>UI.selectMission(i));
     g.appendChild(c);
   });
+}
+/* ---------- profiles UI ---------- */
+let profEditIdx=-1, profDraft=null, profDelArm=false;
+function syncProfChip(){
+  const p=prof(), c=$('profChipEmb');
+  const g=c.getContext&&c.getContext('2d'); if(!g)return;
+  g.clearRect(0,0,36,36);
+  drawEmblem(g,p.emb,18,18,14,PALETTE[p.col].main);
+  $('profChipName').textContent=p.name;
+  $('profChipName').style.color=PALETTE[p.col].main;
+}
+function buildProfiles(){
+  profDelArm=false;
+  const del=$('btnProfDel');
+  del.textContent='Delete'; del.disabled=PROFILES.list.length<=1;
+  const list=$('profList'); list.innerHTML='';
+  PROFILES.list.forEach((p,i)=>{
+    const active=i===PROFILES.active;
+    const row=document.createElement('div');
+    row.className='prow'+(active?' on':'');
+    const un=active?unlocked:p.unlocked; // active profile's live progress
+    row.innerHTML='<div class="pn" style="color:'+PALETTE[p.col].main+'">'+p.name+'</div>'+
+      '<div class="pp">CAMPAIGN '+Math.min(un,MISSIONS.length)+'/'+MISSIONS.length+'</div>';
+    row.insertBefore(embCanvas(p.emb,PALETTE[p.col].main,17),row.firstChild);
+    row.addEventListener('click',()=>{AudioSys.click();switchProfile(i);});
+    list.appendChild(row);
+  });
+}
+function switchProfile(i){
+  if(i!==PROFILES.active){
+    stashProfile(); PROFILES.active=i; applyProfile();
+    buildSetups(); saveState(); syncProfChip();
+  }
+  buildProfiles();
+}
+function openProfEdit(draft,isNew){
+  profDraft=draft; profEditIdx=isNew?-1:PROFILES.active;
+  $('profEditTitle').textContent=isNew?'NEW PROFILE':'EDIT PROFILE';
+  $('profName').value=draft.name;
+  renderProfPickers();
+  UI.show('scrProfEdit');
+}
+function renderProfPickers(){
+  const d=profDraft;
+  const cols=$('profCols'); cols.innerHTML='';
+  PALETTE.forEach((C,ci)=>{
+    const b=document.createElement('button');
+    b.className='sw'+(d.col===ci?' on':''); b.style.background=C.main;
+    b.addEventListener('click',()=>{AudioSys.click();d.col=ci;renderProfPickers();});
+    cols.appendChild(b);
+  });
+  const embs=$('profEmbs'); embs.innerHTML='';
+  for(let e=0;e<NEMB;e++){
+    const b=document.createElement('button');
+    b.className='embB'+(d.emb===e?' on':'');
+    b.appendChild(embCanvas(e,PALETTE[d.col].main,15));
+    const ee=e;
+    b.addEventListener('click',()=>{AudioSys.click();d.emb=ee;renderProfPickers();});
+    embs.appendChild(b);
+  }
 }
 function buildSetups(){
   const seg=(cont,opts,get,set)=>{
@@ -1406,11 +1791,13 @@ document.addEventListener('visibilitychange',()=>{
 /* ---------- boot ---------- */
 loadState();
 $('btnSound').textContent=soundOn?'♪':'✕';
-resize(); buildSetups(); startMenu();
+resize(); buildSetups(); syncProfChip(); startMenu();
 requestAnimationFrame(t=>{last=t;requestAnimationFrame(frame);});
 
 /* test hooks (also handy for debugging on device) */
 window.__ms={S,CFG,STAT,UPGDEF,MISSIONS,RULES,RULE_DEFAULT,newGame,update,buyUpg,
+  buyStim,doStim,stimAct,
+  PROFILES,prof,mkProfile,switchProfile,applyProfile,stashProfile,validProfile,
   buildMissionDef,buildSkirmishDef,buildVersusDef,spawnUnit,saveState,loadState,AudioSys};
 </script>
 </body>
