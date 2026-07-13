@@ -152,6 +152,10 @@
   .embB{width:46px;height:46px;background:#101724;border:1px solid #2b3a55;cursor:pointer;
     display:flex;align-items:center;justify-content:center;padding:0}
   .embB.on{border-color:#ffb454;background:#1d2a40}
+  /* armory */
+  #armCv{width:min(56vw,200px);height:min(56vw,200px);border:1px solid #2b3a55;background:#0a0e17}
+  #armW{max-width:min(92vw,560px)}
+  #scrArmory .seg{padding:7px 10px;font-size:11.5px;min-width:0}
   /* gauntlet draft */
   #draftList{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;width:min(92vw,640px)}
   #draftList .card .s{color:#aebad2;line-height:1.45}
@@ -191,6 +195,7 @@
   <button class="mbtn" id="btnEndless" onclick="UI.startEndless()">Endless</button>
   <button class="mbtn" id="btnGaunt" onclick="UI.startGauntlet()">Gauntlet</button>
   <button class="mbtn" onclick="UI.go('scrVersus')">Versus · 2P</button>
+  <button class="mbtn" onclick="UI.armory('scrMenu')">Armory</button>
   <button class="mbtn" onclick="UI.go('scrHelp')">How to Play</button>
   <div class="foot">HOLD &amp; DRAG TO COMMAND · SINGLE-FILE HTML5</div>
 </div>
@@ -270,7 +275,21 @@
   <div class="lbl">Emblem</div>
   <div id="profEmbs"></div>
   <button class="mbtn hot" onclick="UI.profSave()">Save</button>
+  <button class="mbtn small" id="btnProfArm" onclick="UI.armory('scrProfEdit')">Armory</button>
   <button class="mbtn small" onclick="UI.profCancel()">Cancel</button>
+</div>
+
+<!-- ARMORY -->
+<div id="scrArmory" class="screen hidden">
+  <h2 class="sh">Armory</h2>
+  <div class="eyebrow">Cosmetic only — every marine fights the same</div>
+  <canvas id="armCv" width="440" height="440"></canvas>
+  <div class="row"><div class="lbl">Helmet</div><div class="row" id="armH"></div></div>
+  <div class="row"><div class="lbl">Pauldrons</div><div class="row" id="armP"></div></div>
+  <div class="row"><div class="lbl">Pack</div><div class="row" id="armB"></div></div>
+  <div class="row"><div class="lbl">Weapon</div><div class="row" id="armW"></div></div>
+  <div class="row"><div class="lbl">Armor tone</div><div class="row" id="armC"></div></div>
+  <button class="mbtn small" onclick="UI.armoryBack()">Back</button>
 </div>
 
 <!-- GAUNTLET DRAFT -->
@@ -533,8 +552,11 @@ const AudioSys={ac:null,mg:null,on:true,nb:null,shots:0,
     g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     s.connect(f); f.connect(g); g.connect(this.mg); s.start(t); s.stop(t+dur+.02);
   },
-  shot(){ if(this.shots>=3) return; this.shots++;
-    this.noise(.05,.05,rnd(1700,2600),1.2); this.tone(rnd(160,220),80,.04,'square',.02); },
+  shot(w){ if(this.shots>=3) return; this.shots++; this.shotSnd(w); },
+  shotSnd(w){ // per-weapon-skin gunshot recipe; budget-free (Armory preview)
+    const s=KIT_W[w||0].snd;
+    this.noise(s.nd,s.nv,rnd(s.nf0,s.nf1),s.nq);
+    this.tone(rnd(s.tf0,s.tf1),s.te,s.td,s.tw,s.tv); },
   die(){ this.noise(.14,.06,600,.8); this.tone(190,55,.16,'sawtooth',.05); },
   convert(){ this.tone(300,900,.16,'sine',.06); this.tone(600,1400,.14,'sine',.035,.05); },
   cap(){ this.tone(520,660,.1,'square',.05); this.tone(660,880,.12,'square',.05,.09); },
@@ -547,38 +569,189 @@ const AudioSys={ac:null,mg:null,on:true,nb:null,shots:0,
   lose(){ this.tone(300,300,.2,'sawtooth',.06); this.tone(210,150,.4,'sawtooth',.06,.18); },
 };
 
-/* ---------- sprites (procedural marine atlases) ---------- */
-const CELL=44, NANG=16, MUZ=[];
-for(let i=0;i<NANG;i++){const a=i/NANG*TAU, mx=21.6, my=6.9;
-  MUZ.push({x:mx*Math.cos(a)-my*Math.sin(a), y:mx*Math.sin(a)+my*Math.cos(a)});}
+/* ---------- kits (cosmetic marine customization, see ADR 0004) ----------
+   A Kit = {h,p,b,w,c} indices into the slot tables below (helmet, pauldrons,
+   pack, weapon, secondary color). Purely cosmetic: only drawMarine, the
+   muzzle table (MUZW) and AudioSys.shot ever read it — never STAT/CFG.
+   Teams carry T.kit (null = stock look); only the profile player's team
+   gets one (foes, Horde, Versus P2 and the menu demo stay stock). */
+const KIT_STOCK={h:0,p:0,b:0,w:0,c:0};
+const kitKey=k=>k.h+'.'+k.p+'.'+k.b+'.'+k.w+'.'+k.c;
+function profKit(){const k=prof().kit||KIT_STOCK;
+  return {h:k.h,p:k.p,b:k.b,w:k.w,c:k.c};}
+/* secondary colors: own palette, deliberately distinct from the 6 team
+   colors so a kit can never impersonate an enemy team (ADR 0004). Index 0
+   is the stock grays exactly. */
+const kitTone=(n,h)=>({name:n,body:h,helm:shade(h,.4),hi:shade(h,.72)});
+const KIT_C=[
+  {name:'STEEL',body:'#57627a',helm:'#94a0b6',hi:'#c3cddd'},
+  kitTone('GUNMETAL','#3a4150'),
+  kitTone('ONYX','#23272f'),
+  kitTone('BONE','#b3ac97'),
+  kitTone('FROST','#8fa6bd'),
+  kitTone('OLIVE','#6b7355'),
+  kitTone('RUST','#8a5a44'),
+  kitTone('PLUM','#6e4a66'),
+];
 function circ(g,x,y,r){g.beginPath();g.arc(x,y,r,0,TAU);g.fill()}
 function ell(g,x,y,rx,ry){g.beginPath();g.ellipse(x,y,rx,ry,0,0,TAU);g.fill()}
-function drawMarine(g,C,f){ // facing +X, ~22px design box
+/* slot drawers work in the marine's design space (facing +X, ~22px box).
+   C = team palette color, K = secondary tone. */
+const KIT_H=[
+  {name:'STANDARD',dr(g,C,K){
+    g.fillStyle=K.helm; circ(g,2.6,0,3.5);
+    g.fillStyle=K.hi; circ(g,1.7,-1.1,1.1);
+    g.fillStyle=C.light; ell(g,4.7,0,1.5,2.2);}},
+  {name:'RAIDER',dr(g,C,K){
+    g.fillStyle=K.helm; g.fillRect(-.8,-3.3,6.6,6.6);
+    g.fillStyle=K.hi; g.fillRect(-.2,-2.7,1.2,5.4);
+    g.fillStyle=C.light; g.fillRect(4.4,-2.2,1.4,4.4);}},
+  {name:'SCOUT',dr(g,C,K){
+    g.fillStyle=K.hi; g.fillRect(-1.4,-4.8,.8,3);          // antenna
+    g.fillStyle=K.helm; circ(g,2.4,0,2.9);
+    g.fillStyle=C.light; ell(g,4.3,0,1.2,2.5);}},
+  {name:'JUGGERNAUT',dr(g,C,K){
+    g.fillStyle=K.helm; circ(g,2.5,0,4.1);
+    g.fillStyle=K.hi; ell(g,1.3,0,1.5,3.1);
+    g.fillStyle='#20262f'; g.fillRect(5.4,-2.7,1.2,5.4);   // brow ridge
+    g.fillStyle=C.light; ell(g,5.6,0,1.0,1.5);}},
+];
+const KIT_P=[
+  {name:'ROUNDED',dr(g,C,K){
+    g.fillStyle=C.main; circ(g,-1.6,-5.3,2.5); circ(g,-1.6,5.3,2.5);
+    g.fillStyle=C.light; circ(g,-2.3,-5.8,.9); circ(g,-2.3,5.8,.9);}},
+  {name:'SPIKED',dr(g,C,K){
+    g.fillStyle=C.main; circ(g,-1.6,-5.0,2.2); circ(g,-1.6,5.0,2.2);
+    for(const s of [-1,1]){g.beginPath();
+      g.moveTo(-3.1,s*6.2); g.lineTo(-.1,s*6.2); g.lineTo(-1.6,s*8.7);
+      g.closePath(); g.fill();}
+    g.fillStyle=C.light; circ(g,-2.2,-5.5,.8); circ(g,-2.2,5.5,.8);}},
+  {name:'PLATED',dr(g,C,K){
+    g.fillStyle=C.main; g.fillRect(-3.8,-7.7,4.4,3.4); g.fillRect(-3.8,4.3,4.4,3.4);
+    g.fillStyle=C.light; g.fillRect(-3.8,-7.7,4.4,1.1); g.fillRect(-3.8,6.6,4.4,1.1);}},
+  {name:'RECON',dr(g,C,K){
+    g.fillStyle=C.main; circ(g,-1.6,-4.9,1.8); circ(g,-1.6,4.9,1.8);
+    g.fillStyle=C.dark; circ(g,-1.6,-4.9,.7); circ(g,-1.6,4.9,.7);}},
+];
+const KIT_B=[
+  {name:'FIELD PACK',dr(g,C,K){
+    g.fillStyle=C.dark; g.fillRect(-8.2,-3,3.4,6);}},
+  {name:'TWIN TANKS',dr(g,C,K){
+    g.fillStyle=C.dark; circ(g,-7.4,-2.1,2.0); circ(g,-7.4,2.1,2.0);
+    g.fillStyle=K.hi; circ(g,-7.9,-2.6,.6); circ(g,-7.9,1.6,.6);}},
+  {name:'COMMS ARRAY',dr(g,C,K){
+    g.fillStyle=C.dark; g.fillRect(-8.2,-3,3.4,6);
+    g.fillStyle=K.helm; g.fillRect(-10.6,-.7,2.6,1.4);
+    g.fillStyle=C.light; circ(g,-10.6,0,.8);}},
+  {name:'JUMP JETS',dr(g,C,K){
+    g.fillStyle=C.dark; g.fillRect(-8.6,-4.4,3.2,3.2); g.fillRect(-8.6,1.2,3.2,3.2);
+    g.fillStyle='#ffb454'; circ(g,-8.9,-2.8,.9); circ(g,-8.9,2.8,.9);}},
+];
+/* Weapons are cosmetic-only and all single-shot gun fantasies by design
+   (ADR 0004): identical stats incl. cadence, so no burst/spread fantasies.
+   tip = barrel end in design coords (feeds MUZW); snd = the procedural
+   gunshot recipe (noise dur/vol/band + tone f0→f1/dur/wave/vol). */
+const KIT_W=[
+  {name:'AR-7 RIFLE',tip:[10.8,3.45],
+   snd:{nd:.05,nv:.05,nf0:1700,nf1:2600,nq:1.2,tf0:160,tf1:220,te:80,td:.04,tw:'square',tv:.02},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.4,9,2.1);
+    g.fillStyle='#8b97ac'; g.fillRect(9.4,2.55,1.8,1.8);
+    g.fillStyle='#39414f'; circ(g,4.6,3.4,1.5);}},
+  {name:'CARBINE',tip:[9.3,3.45],
+   snd:{nd:.04,nv:.05,nf0:2200,nf1:3200,nq:1.3,tf0:200,tf1:260,te:100,td:.035,tw:'square',tv:.02},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.4,6.6,2.1);
+    g.fillStyle='#8b97ac'; g.fillRect(8.2,2.55,1.4,1.8);
+    g.fillStyle='#39414f'; circ(g,4.2,3.4,1.5);}},
+  {name:'MARKSMAN DMR',tip:[13.9,3.35],
+   snd:{nd:.07,nv:.05,nf0:1200,nf1:1800,nq:1.1,tf0:130,tf1:150,te:60,td:.06,tw:'square',tv:.025},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.5,11.4,1.7);
+    g.fillStyle=K.hi; circ(g,4.8,2.1,1.0);                 // scope
+    g.fillStyle='#8b97ac'; g.fillRect(13,2.7,1.2,1.3);
+    g.fillStyle='#39414f'; circ(g,4.6,3.5,1.4);}},
+  {name:'GAUSS RIFLE',tip:[11.6,3.45],
+   snd:{nd:.06,nv:.05,nf0:700,nf1:1100,nq:.9,tf0:100,tf1:120,te:45,td:.07,tw:'sawtooth',tv:.03},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.1,8.6,2.7);
+    g.fillStyle=K.hi; g.fillRect(5.5,2.0,.8,2.9); g.fillRect(7.3,2.0,.8,2.9); // coils
+    g.fillStyle='#8b97ac'; g.fillRect(10.2,2.3,1.6,2.3);
+    g.fillStyle='#39414f'; circ(g,4.2,3.5,1.5);}},
+  {name:'PLASMA CASTER',tip:[10.8,3.45],
+   snd:{nd:.04,nv:.03,nf0:2600,nf1:3600,nq:1.5,tf0:850,tf1:950,te:280,td:.08,tw:'sine',tv:.04},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.3,7.6,2.3);
+    g.fillStyle=K.hi; g.fillRect(3.4,2.1,.9,2.7);
+    g.fillStyle=C.light; circ(g,9.9,3.45,1.3);             // glow tip
+    g.fillStyle='#39414f'; circ(g,4.6,3.5,1.4);}},
+  {name:'RAIL LANCE',tip:[14.2,3.45],
+   snd:{nd:.04,nv:.05,nf0:3000,nf1:4200,nq:1.6,tf0:280,tf1:320,te:90,td:.05,tw:'square',tv:.025},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.9,12.8,1.1);
+    g.fillStyle=K.hi; g.fillRect(1.6,3.2,12.8,.4);         // rail stripe
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.2,4,2.6);
+    g.fillStyle='#39414f'; circ(g,4.3,3.6,1.4);}},
+  {name:'HAND CANNON',tip:[8.6,3.45],
+   snd:{nd:.06,nv:.06,nf0:900,nf1:1400,nq:1.0,tf0:110,tf1:130,te:50,td:.06,tw:'square',tv:.03},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(2.6,2.2,4.6,2.5);
+    g.fillStyle='#8b97ac'; g.fillRect(7.2,2.45,1.6,2.0);
+    g.fillStyle='#39414f'; circ(g,3.8,3.8,1.7);}},
+  {name:'BOLTER',tip:[10.9,3.45],
+   snd:{nd:.07,nv:.06,nf0:600,nf1:900,nq:.8,tf0:85,tf1:100,te:40,td:.07,tw:'sawtooth',tv:.03},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,1.9,7.8,3.1);
+    g.fillStyle=K.hi; circ(g,9.7,3.45,1.6);                // massive bore
+    g.fillStyle='#161b24'; circ(g,9.7,3.45,1.0);
+    g.fillStyle='#39414f'; circ(g,4.4,3.6,1.6);}},
+  {name:'PULSE BLASTER',tip:[10.8,3.45],
+   snd:{nd:.03,nv:.03,nf0:2400,nf1:3400,nq:1.6,tf0:1150,tf1:1300,te:200,td:.05,tw:'square',tv:.035},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.4,7,2.1);
+    g.fillStyle=K.hi; g.fillRect(8.6,2.1,2.2,.8); g.fillRect(8.6,4.0,2.2,.8); // emitter fork
+    g.fillStyle=C.light; circ(g,9.8,3.45,.7);
+    g.fillStyle='#39414f'; circ(g,4.4,3.4,1.4);}},
+  {name:'SIEGE GUN',tip:[13.4,3.45],
+   snd:{nd:.09,nv:.06,nf0:400,nf1:700,nq:.8,tf0:65,tf1:80,te:30,td:.09,tw:'sawtooth',tv:.035},
+   dr(g,C,K){
+    g.fillStyle='#161b24'; g.fillRect(1.6,2.0,10.4,2.9);
+    g.fillStyle=K.hi; g.fillRect(6.6,1.9,1.0,3.1);         // band
+    g.fillStyle='#8b97ac'; g.fillRect(12.0,1.8,1.6,3.3);   // muzzle brake
+    g.fillStyle='#39414f'; circ(g,4.2,3.6,1.6);}},
+];
+
+/* ---------- sprites (procedural marine atlases) ---------- */
+const CELL=44, NANG=16;
+/* per-weapon muzzle offsets (design tip × sprite scale 2, per angle) */
+const MUZW=KIT_W.map(W=>{const out=[];
+  for(let i=0;i<NANG;i++){const a=i/NANG*TAU, mx=W.tip[0]*2, my=W.tip[1]*2;
+    out.push({x:mx*Math.cos(a)-my*Math.sin(a), y:mx*Math.sin(a)+my*Math.cos(a)});}
+  return out;});
+const MUZ=MUZW[0]; // stock weapon
+function drawMarine(g,C,f,kit){ // facing +X, ~22px design box
+  const kt=kit||KIT_STOCK, K=KIT_C[kt.c];
   const off=f===0?0:(f===1?2.1:-2.1);
   g.fillStyle='#20262f'; circ(g,-1.2+off,-3.6,1.7); circ(g,-1.2-off,3.6,1.7); // boots
-  g.fillStyle=C.dark; g.fillRect(-8.2,-3,3.4,6);                              // pack
-  g.fillStyle='#57627a'; ell(g,0,0,5.4,6.4);                                  // torso
-  g.fillStyle=C.main; circ(g,-1.6,-5.3,2.5); circ(g,-1.6,5.3,2.5);            // pauldrons
-  g.fillStyle=C.light; circ(g,-2.3,-5.8,.9); circ(g,-2.3,5.8,.9);
-  g.fillStyle=C.dark; ell(g,.6,0,3.1,4.2);                                    // chestplate
+  KIT_B[kt.b].dr(g,C,K);                                                     // pack
+  g.fillStyle=K.body; ell(g,0,0,5.4,6.4);                                    // torso
+  KIT_P[kt.p].dr(g,C,K);                                                     // pauldrons
+  g.fillStyle=C.dark; ell(g,.6,0,3.1,4.2);                                   // chestplate
   g.fillStyle=C.main; circ(g,1.2,0,1.05);
-  g.fillStyle='#94a0b6'; circ(g,2.6,0,3.5);                                   // helmet
-  g.fillStyle='#c3cddd'; circ(g,1.7,-1.1,1.1);
-  g.fillStyle=C.light; ell(g,4.7,0,1.5,2.2);                                  // visor
-  g.fillStyle='#161b24'; g.fillRect(1.6,2.4,9,2.1);                           // rifle
-  g.fillStyle='#8b97ac'; g.fillRect(9.4,2.55,1.8,1.8);
-  g.fillStyle='#39414f'; circ(g,4.6,3.4,1.5);                                 // grip
+  KIT_H[kt.h].dr(g,C,K);                                                     // helmet + visor
+  KIT_W[kt.w].dr(g,C,K);                                                     // weapon
 }
 const ATLAS={};
-function atlas(ci){
-  if(ATLAS[ci]) return ATLAS[ci];
+function atlas(ci,kit){
+  const key=kit?ci+'|'+kitKey(kit):ci;
+  if(ATLAS[key]) return ATLAS[key];
   const c=document.createElement('canvas'); c.width=CELL*NANG; c.height=CELL*3;
   const g=c.getContext('2d');
   for(let a=0;a<NANG;a++) for(let f=0;f<3;f++){
     g.save(); g.translate(a*CELL+CELL/2, f*CELL+CELL/2); g.rotate(a/NANG*TAU); g.scale(2,2);
-    drawMarine(g,PALETTE[ci],f); g.restore();
+    drawMarine(g,PALETTE[ci],f,kit); g.restore();
   }
-  ATLAS[ci]=c; return c;
+  ATLAS[key]=c; return c;
 }
 
 /* ---------- emblems (procedural profile insignias) ---------- */
@@ -665,7 +838,8 @@ const GAUNT={run:null,wins:0,best:0};
    the active profile into them, stashProfile() writes them back. */
 const SAVE_KEY='ms_save_v2', SAVE_KEY_V1='ms_save_v1', MAXPROF=8;
 function mkProfile(name,col,emb){
-  return {name:name||'COMMANDER',col:col||0,emb:emb||0,unlocked:0,endlessBest:0,
+  return {name:name||'COMMANDER',col:col||0,emb:emb||0,kit:{...KIT_STOCK},
+    unlocked:0,endlessBest:0,
     gaunt:null,gauntWins:0,gauntBest:0,
     rules:{...RULE_DEFAULT},sk:{foes:2,diff:'normal',map:'open'},vs:{bots:0}};
 }
@@ -688,6 +862,11 @@ function validProfile(d){
   if(typeof d.name==='string'&&d.name.trim())p.name=d.name.trim().toUpperCase().slice(0,12);
   if(Number.isInteger(d.col)&&d.col>=0&&d.col<PALETTE.length)p.col=d.col;
   if(Number.isInteger(d.emb)&&d.emb>=0&&d.emb<NEMB)p.emb=d.emb;
+  if(d.kit&&typeof d.kit==='object'){
+    const max={h:KIT_H.length,p:KIT_P.length,b:KIT_B.length,w:KIT_W.length,c:KIT_C.length};
+    for(const k in max)
+      if(Number.isInteger(d.kit[k])&&d.kit[k]>=0&&d.kit[k]<max[k])p.kit[k]=d.kit[k];
+  }
   if(Number.isInteger(d.unlocked))p.unlocked=clamp(d.unlocked,0,MISSIONS.length);
   if(Number.isInteger(d.endlessBest)&&d.endlessBest>=0)p.endlessBest=d.endlessBest;
   if(Number.isInteger(d.gauntWins)&&d.gauntWins>=0)p.gauntWins=d.gauntWins;
@@ -800,7 +979,7 @@ function buildMissionDef(i){
   const zones=m.z.map(z=>({x:z.x*S.mapW,y:z.y*S.mapH,big:!!z.big}));
   const walls=(m.w||[]).map(w=>({x:w.x*S.mapW,y:w.y*S.mapH,w:w.w*S.mapW,h:w.h*S.mapH}));
   const al=colAlloc();
-  const teams=[{col:al(prof().col),human:true,zone:m.p.z,n:m.p.n}];
+  const teams=[{col:al(prof().col),human:true,zone:m.p.z,n:m.p.n,kit:profKit()}];
   for(const f of m.f) teams.push({col:al(f.c),human:false,zone:f.z,n:f.n,diff:f.d,pers:f.pr,own:f.own||[],pre:f.pre||null});
   return {kind:'mission',mIdx:i,zones,walls,teams,obj:m.obj,time:m.time||0,title:m.t,
     rules:{...RULE_DEFAULT}};
@@ -817,7 +996,7 @@ function buildGridMissionDef(i,m){
   for(let gy=0;gy<gh;gy++) for(let gx=0;gx<gw;gx++)
     zones.push({x:(gx+.5)*cw,y:(gy+.5)*ch,big:false,cell:true});
   const at=(gx,gy)=>gy*gw+gx, midY=(gh/2)|0, al=colAlloc();
-  const teams=[{col:al(prof().col),human:true,zone:at(0,midY),n:m.p.n}];
+  const teams=[{col:al(prof().col),human:true,zone:at(0,midY),n:m.p.n,kit:profKit()}];
   m.f.forEach((f,fi)=>{
     const gy=m.f.length===1?midY:(fi===0?1:gh-2);
     teams.push({col:al(f.c),human:false,zone:at(gw-1,gy),n:f.n,diff:f.d,pers:f.pr,
@@ -852,7 +1031,7 @@ function buildSkirmishDef(foes,diff,map,demo){
     }
     const d=DIFF[diff], per=['rush','eco','bal'], al=colAlloc();
     const st=demo?d.start:RULES.start;
-    teams.push({col:al(demo?0:prof().col),human:!demo,zone:homeCell[0],n:st,diff:demo?diff:null,pers:'bal'});
+    teams.push({col:al(demo?0:prof().col),human:!demo,zone:homeCell[0],n:st,diff:demo?diff:null,pers:'bal',kit:demo?null:profKit()});
     for(let i=1;i<k;i++) teams.push({col:al(i),human:false,zone:homeCell[i],n:st,diff,pers:per[i%3]});
     return {kind:demo?'demo':'skirmish',zones,walls,teams,obj:{t:'elim'},time:0,title:'SKIRMISH',
       grid:{gw,gh},rules:demo?{...RULE_DEFAULT}:{...RULES}};
@@ -875,7 +1054,7 @@ function buildSkirmishDef(foes,diff,map,demo){
     if(farApart(zones,nx,ny,140)) zones.push({x:nx,y:ny,big:!!n.big});}
   const d=DIFF[diff], per=['rush','eco','bal'], al=colAlloc();
   const st=demo?d.start:RULES.start;
-  teams.push({col:al(demo?0:prof().col),human:!demo,zone:0,n:st,diff:demo?diff:null,pers:'bal'});
+  teams.push({col:al(demo?0:prof().col),human:!demo,zone:0,n:st,diff:demo?diff:null,pers:'bal',kit:demo?null:profKit()});
   for(let i=1;i<k;i++) teams.push({col:al(i),human:false,zone:i,n:st,diff,pers:per[i%3]});
   return {kind:demo?'demo':'skirmish',zones,walls,teams,obj:{t:'elim'},time:0,title:'SKIRMISH',
     rules:demo?{...RULE_DEFAULT}:{...RULES}};
@@ -885,7 +1064,7 @@ function buildVersusDef(bots){
     {x:.5*S.mapW,y:.5*S.mapH,big:true},{x:.3*S.mapW,y:.3*S.mapH},{x:.7*S.mapW,y:.3*S.mapH},
     {x:.3*S.mapW,y:.7*S.mapH},{x:.7*S.mapW,y:.7*S.mapH}];
   const st=RULES.start, al=colAlloc();
-  const teams=[{col:al(prof().col),human:true,zone:0,n:st},{col:al(1),human:true,zone:1,n:st}];
+  const teams=[{col:al(prof().col),human:true,zone:0,n:st,kit:profKit()},{col:al(1),human:true,zone:1,n:st}];
   if(bots){ zones.push({x:.5*S.mapW,y:.09*S.mapH},{x:.5*S.mapW,y:.91*S.mapH});
     teams.push({col:al(2),human:false,zone:zones.length-2,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'eco'});
     teams.push({col:al(3),human:false,zone:zones.length-1,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'rush'});}
@@ -899,7 +1078,7 @@ function buildEndlessDef(){
   for(let i=0;i<6;i++){const a=-Math.PI/2+i*TAU/6;
     zones.push({x:(.5+.30*Math.cos(a))*S.mapW,y:(.5+.32*Math.sin(a))*S.mapH,big:false});}
   const al=colAlloc();
-  const teams=[{col:al(prof().col),human:true,zone:0,n:RULE_DEFAULT.start},
+  const teams=[{col:al(prof().col),human:true,zone:0,n:RULE_DEFAULT.start,kit:profKit()},
     {col:al(1),human:false,zone:null,n:0,horde:true}];
   return {kind:'endless',zones,walls:[],teams,obj:{t:'endless'},time:0,title:'ENDLESS',
     rules:{...RULE_DEFAULT}};
@@ -961,7 +1140,8 @@ function newGame(def){
     sm:z.cell?1/cellW:(z.big?.72:1),
     owner:-1,capT:-1,prog:0,st:rnd(.5,2)}));
   def.teams.forEach((td,i)=>{
-    const T={id:i,col:td.col,human:!!td.human,horde:!!td.horde,min:S.demo?40:30,mined:0,kills:0,losses:0,
+    const T={id:i,col:td.col,human:!!td.human,horde:!!td.horde,kit:td.kit||null,
+      min:S.demo?40:30,mined:0,kills:0,losses:0,
       up:{dmg:0,rof:0,spd:0,rng:0,hp:0,spw:0,sup:0},alive:true,hold:false,
       stimOwn:false,stimT:0,pk:mkPk(),
       cp:{x:0,y:0},diff:td.diff||null,pers:td.pers||'bal',
@@ -1048,6 +1228,7 @@ function deathFx(u){
   for(let i=0;i<4;i++) part(1,u.x,u.y,'#d43a2f');
   for(let i=0;i<3;i++) part(1,u.x,u.y,C.dark);
   const cp=part(4,u.x,u.y,C.dark); cp.ai=angIdx(u.ang); cp.col=S.teams[u.team].col;
+  cp.kit=S.teams[u.team].kit;
 }
 const angIdx=a=>((Math.round(a/TAU*NANG)%NANG)+NANG)%NANG;
 
@@ -1134,12 +1315,13 @@ function updateUnits(dt){
   processDeaths();
 }
 function fire(u,v,T){
-  const mi=angIdx(u.ang), M=MUZ[mi], mx=u.x+M.x*.55, my=u.y+M.y*.55;
+  const wi=T.kit?T.kit.w:0;
+  const mi=angIdx(u.ang), M=MUZW[wi][mi], mx=u.x+M.x*.55, my=u.y+M.y*.55;
   S.tracers.push({x1:mx,y1:my,x2:v.x+rnd(-3,3),y2:v.y+rnd(-3,3),life:.07});
   part(5,mx,my,'#ffe9a0',5,5);
   part(2,v.x+rnd(-2,2),v.y+rnd(-2,2),'#ffd28a');
   v.hp-=STAT.dmg(T); v.hf=.09;
-  AudioSys.shot();
+  AudioSys.shot(wi);
   if(v.hp<=0&&!v.dead){v.dead=true;deaths.push({u:v,by:u.team});}
 }
 function processDeaths(){
@@ -1620,12 +1802,12 @@ function render(){
   for(const p of S.parts) if(p.t===4){
     const a=1-p.life/p.max;
     ctx.globalAlpha=a*.7;
-    ctx.drawImage(atlas(p.col),p.ai*CELL,0,CELL,CELL,p.x-CELL/2,p.y-CELL/2,CELL,CELL);
+    ctx.drawImage(atlas(p.col,p.kit),p.ai*CELL,0,CELL,CELL,p.x-CELL/2,p.y-CELL/2,CELL,CELL);
   }
   ctx.globalAlpha=1;
   // units
   for(const u of S.units){
-    const T=S.teams[u.team], A=atlas(T.col);
+    const T=S.teams[u.team], A=atlas(T.col,T.kit);
     const moving=Math.abs(u.vx)+Math.abs(u.vy)>10;
     const fr=moving?1+(Math.floor(u.anim)%2):0;
     const ai=angIdx(u.ang);
@@ -1907,7 +2089,7 @@ function moveKeyCp(dt){
 }
 
 /* ---------- UI / screens ---------- */
-const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrProfiles','scrProfEdit','scrDraft'];
+const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrProfiles','scrProfEdit','scrArmory','scrDraft'];
 let briefIdx=0, rulesFrom='scrSkirmish';
 const UI={
   show(id){for(const s of SCREENS)$(s).classList.toggle('hidden',s!==id);},
@@ -1958,6 +2140,11 @@ const UI={
     if(soundOn)AudioSys.click();},
   toggleDebug(){DBG=!DBG;$('btnDebugP').textContent='Debug: '+(DBG?'On':'Off');},
   rules(from){AudioSys.init();AudioSys.click();rulesFrom=from;buildRules();this.show('scrRules');},
+  armory(from){AudioSys.init();AudioSys.click();armFrom=from||'scrMenu';
+    buildArmory(); this.show('scrArmory');
+    if(!armOn){armOn=true; armLast=performance.now(); armT=0; armFire=.7;
+      requestAnimationFrame(armoryFrame);}},
+  armoryBack(){AudioSys.click();armOn=false;this.show(armFrom);},
   profiles(){AudioSys.init();AudioSys.click();buildProfiles();this.show('scrProfiles');},
   profNew(){AudioSys.click();
     if(PROFILES.list.length>=MAXPROF){toast('PROFILE LIMIT REACHED');return;}
@@ -2082,6 +2269,8 @@ function switchProfile(i){
 function openProfEdit(draft,isNew){
   profDraft=draft; profEditIdx=isNew?-1:PROFILES.active;
   $('profEditTitle').textContent=isNew?'NEW PROFILE':'EDIT PROFILE';
+  /* kit edits apply to the active profile immediately — no draft to link for a new one */
+  $('btnProfArm').classList.toggle('hidden',isNew);
   $('profName').value=draft.name;
   renderProfPickers();
   UI.show('scrProfEdit');
@@ -2104,6 +2293,59 @@ function renderProfPickers(){
     b.addEventListener('click',()=>{AudioSys.click();d.emb=ee;renderProfPickers();});
     embs.appendChild(b);
   }
+}
+/* ---------- armory (kit editor + live viewer, see ADR 0004) ----------
+   Edits the ACTIVE profile's kit in place (saved immediately) — it is not
+   part of the profile-edit draft flow. The viewer is a big top-down marine
+   that rotates, walk-cycles, and test-fires the selected weapon skin with
+   its true muzzle offset and sound. */
+let armFrom='scrMenu', armOn=false, armT=0, armLast=0, armFire=.7, armFlash=0;
+function buildArmory(){
+  const kit=prof().kit;
+  const mkRow=(cont,defs,key)=>{
+    const el=$(cont); el.innerHTML='';
+    defs.forEach((d,i)=>{
+      const b=document.createElement('button');
+      b.className='seg'+(kit[key]===i?' on':''); b.textContent=d.name;
+      b.addEventListener('click',()=>{AudioSys.click();kit[key]=i;saveState();
+        if(key==='w')armFire=Math.min(armFire,.3); // preview the new gun promptly
+        buildArmory();});
+      el.appendChild(b);
+    });
+  };
+  mkRow('armH',KIT_H,'h'); mkRow('armP',KIT_P,'p');
+  mkRow('armB',KIT_B,'b'); mkRow('armW',KIT_W,'w');
+  const el=$('armC'); el.innerHTML='';
+  KIT_C.forEach((K,i)=>{
+    const b=document.createElement('button');
+    b.className='sw'+(kit.c===i?' on':''); b.style.background=K.body; b.title=K.name;
+    b.addEventListener('click',()=>{AudioSys.click();kit.c=i;saveState();buildArmory();});
+    el.appendChild(b);
+  });
+}
+function armoryFrame(ts){
+  if(!armOn) return;
+  if($('scrArmory').classList.contains('hidden')){armOn=false;return;}
+  requestAnimationFrame(armoryFrame);
+  const dt=clamp((ts-armLast)/1000,0,.05); armLast=ts; armT+=dt;
+  const kit=prof().kit;
+  armFire-=dt;
+  if(armFire<=0){armFire=1.8; armFlash=.1; AudioSys.shotSnd(kit.w);}
+  if(armFlash>0)armFlash-=dt;
+  const c=$('armCv'), g=c.getContext('2d');
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,c.width,c.height);
+  g.strokeStyle='rgba(120,150,200,.08)'; g.lineWidth=1;
+  for(let x=20;x<c.width;x+=40){g.beginPath();g.moveTo(x,0);g.lineTo(x,c.height);g.stroke();}
+  for(let y=20;y<c.height;y+=40){g.beginPath();g.moveTo(0,y);g.lineTo(c.width,y);g.stroke();}
+  const C=PALETTE[prof().col], walk=1+(Math.floor(armT*5)%2);
+  g.save(); g.translate(c.width/2,c.height/2); g.rotate(armT*.55); g.scale(10,10);
+  drawMarine(g,C,walk,kit);
+  if(armFlash>0){const tip=KIT_W[kit.w].tip, a=armFlash/.1;
+    g.fillStyle='rgba(255,233,160,'+a.toFixed(2)+')';
+    circ(g,tip[0]+.8,tip[1],1.2+(1-a)*1.6);
+    g.strokeStyle='rgba(255,236,170,'+(a*.9).toFixed(2)+')'; g.lineWidth=.3;
+    g.beginPath(); g.moveTo(tip[0]+1.5,tip[1]); g.lineTo(tip[0]+8,tip[1]); g.stroke();}
+  g.restore();
 }
 function buildSetups(){
   const seg=(cont,opts,get,set)=>{
@@ -2209,7 +2451,8 @@ window.__ms={S,CFG,STAT,UPGDEF,MISSIONS,RULES,RULE_DEFAULT,newGame,update,buyUpg
   buildMissionDef,buildSkirmishDef,buildVersusDef,buildEndlessDef,EV_CFG,waveSize,
   buildGauntletDef,gauntOffers,GAUNT,GAUNT_LEN,GAUNT_RUNGS,PERKDEF,applyPerks,
   gauntStartBattle,gauntEndRun,showDraft,sRng,UI,gauntDebriefText,
-  spawnUnit,saveState,loadState,AudioSys};
+  spawnUnit,saveState,loadState,AudioSys,
+  KIT_H,KIT_P,KIT_B,KIT_W,KIT_C,KIT_STOCK,MUZW,profKit,drawMarine,atlas,buildArmory};
 </script>
 </body>
 </html>

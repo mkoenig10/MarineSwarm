@@ -99,9 +99,27 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   rate-limited by the `shots` counter: `AudioSys.shot()` no-ops once
   `shots>=3`, and `shots` is reset to 0 at the top of `update(dt)` —
   i.e. max 3 gunshot sounds per fixed-step tick.
-- **Sprite atlas** (`atlas()`/`drawMarine()`) — procedurally drawn per-color
-  marine sprite sheet (16 angles × 3 anim frames), canvas-cached per color
-  index in `ATLAS`.
+- **Sprite atlas** (`atlas(ci,kit)`/`drawMarine(g,C,f,kit)`) — procedurally
+  drawn per-color marine sprite sheet (16 angles × 3 anim frames),
+  canvas-cached in `ATLAS` keyed by color index (stock) or color+kit key.
+- **Kits / Armory** (see CONTEXT.md: Armory/Kit/Stock look/Secondary color
+  and `docs/adr/0004-kits-are-cosmetic-only.md`) — cosmetic marine
+  customization. A **Kit** `{h,p,b,w,c}` indexes the slot tables `KIT_H`/
+  `KIT_P`/`KIT_B` (helmet/pauldrons/pack, 4 each), `KIT_W` (10 weapons —
+  all single-shot gun fantasies by design, each with its own barrel-tip
+  muzzle offset in `MUZW` and gunshot recipe in `snd` read by
+  `AudioSys.shot(w)`), and `KIT_C` (8 secondary tones, a palette
+  deliberately distinct from the 6 team colors so kits can't impersonate
+  an enemy team). Purely cosmetic: only `drawMarine`, `MUZW` and
+  `AudioSys.shot` read it — never `STAT`/`CFG`. Teams carry `T.kit`
+  (null = stock look); def builders give it to the profile player's team
+  only via `profKit()` (foes, Horde, Versus P2, menu demo stay stock).
+  Persisted per profile (`kit`, validated in `validProfile`), all options
+  free from the start. The **Armory** (`scrArmory`, main-menu button +
+  linked from profile edit) edits the active profile's kit in place and
+  previews it in a live viewer (`armoryFrame`: rotating, walk-cycling,
+  test-firing with true muzzle offset + `AudioSys.shotSnd(w)`, which
+  bypasses the per-tick shot budget).
 - **GRID** — simple spatial hash for neighbor queries (separation, target
   acquisition, absorb-conversion checks). Rebuilt every frame in `statsPass()`.
 - **Mission/def builders** — `buildMissionDef(i)`, `buildSkirmishDef(...)`,
