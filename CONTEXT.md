@@ -50,6 +50,21 @@ The palette color a profile chooses; it becomes that player's team color in ever
 A procedurally drawn insignia chosen per profile, rendered in the profile color. Appears on the menu chip, profile and end screens, Versus headers, and faintly on the owner's command-point beacon and home pad.
 _Avoid_: avatar, logo, icon
 
+**Armory**:
+The customization screen: a live top-down viewer of one of your marines plus the pickers that assemble your Kit. Opened from the main menu.
+_Avoid_: locker, barracks
+
+**Kit**:
+A profile's saved cosmetic ensemble — helmet, pauldrons, pack, weapon, and secondary color — worn by every marine in that player's army in every mode. Purely cosmetic: a kitted marine and a stock marine fight identically. Non-player forces always wear the stock look.
+_Avoid_: loadout (implies stat trade-offs), skin
+
+**Stock look**:
+The default marine appearance — the Kit every marine wears before customization, and the permanent dress of AI foes, the Horde, and Versus P2.
+
+**Secondary color**:
+The Kit's armor tone, painted on the suit's parts that team color doesn't claim. Chosen from its own palette of tones deliberately distinct from the six team colors, so a Kit can never impersonate an enemy team.
+_Avoid_: trim, accent (both undersell it), team color (that stays the profile color)
+
 **Reinforce**:
 The upgrade that shortens the spawn interval — faster arrivals, same army ceiling.
 _Avoid_: spawn rate (in player-facing text)
