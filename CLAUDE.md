@@ -242,6 +242,14 @@ counts, combat/income actually happened, no units embedded in walls).
 
 ## File map
 - `/mnt/user-data/outputs/marine-swarm.html` — the game, ship this file.
+- `ios/` — bare WKWebView Xcode project for on-device iPhone playtesting
+  (personal-device signing only, not distribution). Bundles
+  `../marine-swarm.html` **by reference** at build time — the HTML stays
+  the single source of truth and needs no changes for iOS. Landscape-
+  locked, edge-to-edge, system edge gestures deferred; phone localStorage
+  saves are treated as disposable. Setup + first-playtest checklist:
+  `ios/README.md`. No dependencies (Capacitor et al. deliberately
+  rejected — the game needs zero native APIs).
 - This `CLAUDE.md` — handoff doc only, not referenced by the game itself.
 
 ## Agent skills

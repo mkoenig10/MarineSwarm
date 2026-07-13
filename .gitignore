@@ -1,3 +1,5 @@
 .claude/settings.local.json
 .scratch/
 .DS_Store
+xcuserdata/
+DerivedData/
