@@ -126,7 +126,8 @@
   .helptxt b{color:#ffb454;letter-spacing:.06em}
   .bigend{font-size:min(11vw,52px);font-weight:800;letter-spacing:.14em}
   .bigend.win{color:#7ee08c}.bigend.lose{color:#ff6a5e}
-  #endStats{font-family:ui-monospace,monospace;font-size:13px;color:#9fb0cc;line-height:1.8}
+  #endStats{font-family:ui-monospace,monospace;font-size:13px;color:#9fb0cc;line-height:1.8;
+    -webkit-user-select:text;user-select:text}
   .keycap{display:inline-block;border:1px solid #3a4c72;padding:0 6px;font-family:ui-monospace,monospace;font-size:11px;background:#0e1420}
   /* profiles */
   .mbtn:disabled{opacity:.4;cursor:default}
@@ -315,6 +316,7 @@
   <div class="bigend" id="endTitle">VICTORY</div>
   <div class="eyebrow" id="endSub"></div>
   <div id="endStats"></div>
+  <button class="mbtn small hidden" id="btnCopyDeb" onclick="UI.copyDebrief()">Copy Debrief</button>
   <button class="mbtn hot hidden" id="endNext" onclick="UI.nextMission()">Next Mission</button>
   <button class="mbtn" id="btnEndRetry" onclick="UI.restart()">Retry</button>
   <button class="mbtn small" onclick="UI.quit()">Menu</button>
@@ -459,14 +461,20 @@ const waveSize=n=>Math.round(8+n*2+n*n*.12);
    grid reclamation. Perks are run-long player-only modifiers folded into
    T.pk multipliers. Always RULE_DEFAULT — custom Battle Rules never apply. */
 const GAUNT_LEN=8;
-const GAUNT_RUNGS=[ // rungs 1..7; rung 8 is the finale
+/* rungs 1..7; rung 8 is the finale. nm = foe starting-army multiplier on
+   the DIFF preset's own start size (player always starts RULE_DEFAULT);
+   up = free upgrade levels per foe (cycling hp/dmg/rof, on top of the DIFF
+   preset's pre). Both exist because the first playtest (9:41 full clear,
+   army never below 15) showed 12-start foes die to a straight rush before
+   difficulty or economy ever matter. */
+const GAUNT_RUNGS=[
   {foes:1,diff:'easy',  maps:['open']},
   {foes:1,diff:'normal',maps:['open','scatter']},
-  {foes:2,diff:'normal',maps:['open','scatter','corridors']},
-  {foes:2,diff:'normal',maps:['open','scatter','corridors','grid']},
-  {foes:2,diff:'hard',  maps:['open','scatter','corridors']},
-  {foes:3,diff:'hard',  maps:['open','scatter','corridors','grid']},
-  {foes:4,diff:'hard',  maps:['open','scatter','corridors']},
+  {foes:2,diff:'hard',  maps:['open','scatter','corridors'],nm:1.1,up:1},
+  {foes:3,diff:'hard',  maps:['scatter','corridors','grid'],nm:1.2,up:2},
+  {foes:2,diff:'brutal',maps:['open','scatter','corridors'],nm:1.2,up:2},
+  {foes:3,diff:'brutal',maps:['corridors','grid'],          nm:1.2,up:3},
+  {foes:4,diff:'brutal',maps:['open','scatter','corridors'],nm:1.3,up:4},
 ];
 /* st:1 = stackable stat perk (can be drafted repeatedly); the rest are
    unique rule-benders. ap() mutates a team's pk modifier object only —
@@ -903,13 +911,19 @@ function buildGauntletDef(rung,seed,perks){
   let def, map='finale';
   if(rung>=GAUNT_LEN){
     mapDims();
-    def=buildGridMissionDef(-1,{t:'FINALE',foesOwn:.66,p:{n:14},
-      f:[{d:'hard',n:12,c:1,pr:'rush'},{d:'hard',n:12,c:3,pr:'eco'}],obj:{t:'elim'}});
+    def=buildGridMissionDef(-1,{t:'FINALE',foesOwn:.75,p:{n:14},
+      f:[{d:'brutal',n:20,c:1,pr:'rush',pre:{dmg:1,rof:1,hp:1,spw:1}},
+         {d:'brutal',n:20,c:3,pr:'eco', pre:{dmg:1,rof:1,hp:1,spw:1}}],obj:{t:'elim'}});
   } else {
     const R=GAUNT_RUNGS[rung-1];
     map=R.maps[(SRND()*R.maps.length)|0];
     def=buildSkirmishDef(R.foes,R.diff,map,false);
-    def.teams.forEach(t=>t.n=RULE_DEFAULT.start); // never the profile's custom RULES
+    def.teams.forEach((t,i)=>{ // never the profile's custom RULES
+      if(i===0){t.n=RULE_DEFAULT.start;return;}
+      t.n=Math.round(DIFF[R.diff].start*(R.nm||1));
+      if(R.up){const ord=['hp','dmg','spw','rof']; t.pre={}; // spw: sustained pressure
+        for(let u=0;u<R.up;u++){const k=ord[u%4];t.pre[k]=(t.pre[k]||0)+1;}}
+    });
   }
   SRND=null;
   def.kind='gauntlet'; def.mIdx=null; def.title='GAUNTLET'; def.map=map;
@@ -1352,14 +1366,15 @@ function checkEnd(){
     const r=GAUNT.run;
     if(!P.alive){ // permadeath: the run dies with the army
       const rung=r?r.rung:S.def.rung, rec=r&&r.rung>GAUNT.best;
-      if(r){gauntLogRung(P,false); gauntLast={log:r.log.slice(),perks:r.perks.slice()};}
+      if(r){gauntLogRung(P,false);
+        gauntLast={log:r.log.slice(),perks:r.perks.slice(),seed:r.seed,won:false};}
       gauntEndRun();
       endGame(false,'RUN OVER','Fell on rung '+rung+'/'+GAUNT_LEN+
         (rec?' — deepest run yet.':'.'));
     } else if(alive.length===1&&alive[0]===P&&r){
       gauntLogRung(P,true);
       if(r.rung>=GAUNT_LEN){
-        gauntLast={log:r.log.slice(),perks:r.perks.slice()};
+        gauntLast={log:r.log.slice(),perks:r.perks.slice(),seed:r.seed,won:true};
         GAUNT.wins++; GAUNT.best=GAUNT_LEN; GAUNT.run=null;
         saveState(); syncGauntBtn();
         endGame(true,'GAUNTLET CONQUERED','All '+GAUNT_LEN+' rungs cleared · '+
@@ -1402,6 +1417,17 @@ function gauntDebriefHtml(d){
       return pd?pd.name:id;}).join(', ');
   return h;
 }
+function gauntDebriefText(d){ // plain-text twin of gauntDebriefHtml, for sharing
+  const L=['GAUNTLET DEBRIEF · SEED '+d.seed+' · '+
+    (d.won?'CONQUERED':'FELL ON RUNG '+(d.log.length?d.log[d.log.length-1].r:1)+'/'+GAUNT_LEN)];
+  for(const e of d.log)
+    L.push('R'+e.r+' '+String(e.map).toUpperCase()+' '+fmtT(e.t)+
+      ' lost '+e.lost+' low '+e.low+(e.win?'':' †'));
+  L.push('PERKS: '+(d.perks.length?d.perks.map(id=>{
+    const pd=PERKDEF.find(o=>o.id===id); return pd?pd.name:id;}).join(', '):'none'));
+  return L.join('\n');
+}
+let gauntDebText=''; // last run's shareable debrief (Copy Debrief button)
 function gauntEndRun(){ // run over (loss or forfeit): record the depth
   if(!GAUNT.run) return;
   GAUNT.best=Math.max(GAUNT.best,GAUNT.run.rung);
@@ -1446,6 +1472,8 @@ function endGame(win,title,sub){
     'TIME '+fmtT(S.time)+' &nbsp;·&nbsp; KILLS '+P.kills+
     ' &nbsp;·&nbsp; LOSSES '+P.losses+'<br>MINERALS MINED '+Math.round(P.mined)+
     (S.mode==='gauntlet'&&gauntLast?gauntDebriefHtml(gauntLast):'');
+  gauntDebText=(S.mode==='gauntlet'&&gauntLast)?gauntDebriefText(gauntLast):'';
+  $('btnCopyDeb').classList.toggle('hidden',!gauntDebText);
   gauntLast=null;
   const next=win&&S.mission>=0&&S.mission<MISSIONS.length-1;
   if(win&&S.mission>=0&&S.mission+1>unlocked){unlocked=S.mission+1;saveState();}
@@ -1956,6 +1984,18 @@ const UI={
     saveState(); syncProfChip(); buildProfiles(); this.show('scrProfiles');},
   profCancel(){AudioSys.click();buildProfiles();this.show('scrProfiles');},
   rulesDone(){AudioSys.click();hideRuleTip();this.show(rulesFrom);},
+  copyDebrief(){AudioSys.click();
+    const done=okk=>toast(okk?'DEBRIEF COPIED':'COPY FAILED — SCREENSHOT INSTEAD','#ffd9a1');
+    if(navigator.clipboard&&navigator.clipboard.writeText)
+      navigator.clipboard.writeText(gauntDebText).then(()=>done(true),()=>done(false));
+    else{ // file:// and older mobile browsers: hidden-textarea fallback
+      try{
+        const ta=document.createElement('textarea');
+        ta.value=gauntDebText; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        done(document.execCommand('copy')); ta.remove();
+      }catch(e){done(false);}
+    }},
   rulesReset(){AudioSys.click();Object.assign(RULES,RULE_DEFAULT);buildRules();saveState();},
   stats(){AudioSys.click();
     const box=$('statsBox');
@@ -2168,7 +2208,7 @@ window.__ms={S,CFG,STAT,UPGDEF,MISSIONS,RULES,RULE_DEFAULT,newGame,update,buyUpg
   PROFILES,prof,mkProfile,switchProfile,applyProfile,stashProfile,validProfile,
   buildMissionDef,buildSkirmishDef,buildVersusDef,buildEndlessDef,EV_CFG,waveSize,
   buildGauntletDef,gauntOffers,GAUNT,GAUNT_LEN,GAUNT_RUNGS,PERKDEF,applyPerks,
-  gauntStartBattle,gauntEndRun,showDraft,sRng,UI,
+  gauntStartBattle,gauntEndRun,showDraft,sRng,UI,gauntDebriefText,
   spawnUnit,saveState,loadState,AudioSys};
 </script>
 </body>
