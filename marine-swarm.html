@@ -666,11 +666,13 @@ const prof=()=>PROFILES.list[PROFILES.active];
 function applyProfile(){const p=prof();
   unlocked=p.unlocked; Object.assign(RULES,RULE_DEFAULT,p.rules);
   Object.assign(SK,p.sk); Object.assign(VS,p.vs);
-  GAUNT.run=p.gaunt?{...p.gaunt,perks:p.gaunt.perks.slice()}:null;
+  GAUNT.run=p.gaunt?{...p.gaunt,perks:p.gaunt.perks.slice(),
+    log:(p.gaunt.log||[]).slice()}:null;
   GAUNT.wins=p.gauntWins||0; GAUNT.best=p.gauntBest||0;}
 function stashProfile(){const p=prof();
   p.unlocked=unlocked; p.rules={...RULES}; p.sk={...SK}; p.vs={...VS};
-  p.gaunt=GAUNT.run?{...GAUNT.run,perks:GAUNT.run.perks.slice()}:null;
+  p.gaunt=GAUNT.run?{...GAUNT.run,perks:GAUNT.run.perks.slice(),
+    log:(GAUNT.run.log||[]).slice()}:null;
   p.gauntWins=GAUNT.wins; p.gauntBest=GAUNT.best;}
 function validProfile(d){
   if(!d||typeof d!=='object')return null;
@@ -690,7 +692,12 @@ function validProfile(d){
       const pd=PERKDEF.find(o=>o.id===id); if(!pd)return false;
       if(!pd.st){if(seen.has(id))return false; seen.add(id);}
       return true;});
-    p.gaunt={rung:g.rung,seed:g.seed,ph:g.ph,perks};
+    const log=(Array.isArray(g.log)?g.log:[]).slice(0,GAUNT_LEN)
+      .filter(e=>e&&typeof e==='object'&&Number.isInteger(e.r))
+      .map(e=>({r:e.r,map:String(e.map||'?').slice(0,12),t:Math.max(0,e.t|0),
+        lost:Math.max(0,e.lost|0),low:Math.max(0,e.low|0),
+        sup:Math.max(0,e.sup|0),win:!!e.win}));
+    p.gaunt={rung:g.rung,seed:g.seed,ph:g.ph,perks,log};
   }
   if(d.rules&&typeof d.rules==='object')
     for(const rd of RULEDEF) if(rd.vals.includes(d.rules[rd.k])) p.rules[rd.k]=d.rules[rd.k];
@@ -893,18 +900,19 @@ function buildEndlessDef(){
    deterministically from seed+rung; always RULE_DEFAULT (ADR 0003) */
 function buildGauntletDef(rung,seed,perks){
   SRND=sRng((seed^Math.imul(rung,0x9E3779B9))>>>0);
-  let def;
+  let def, map='finale';
   if(rung>=GAUNT_LEN){
     mapDims();
     def=buildGridMissionDef(-1,{t:'FINALE',foesOwn:.66,p:{n:14},
       f:[{d:'hard',n:12,c:1,pr:'rush'},{d:'hard',n:12,c:3,pr:'eco'}],obj:{t:'elim'}});
   } else {
     const R=GAUNT_RUNGS[rung-1];
-    def=buildSkirmishDef(R.foes,R.diff,R.maps[(SRND()*R.maps.length)|0],false);
+    map=R.maps[(SRND()*R.maps.length)|0];
+    def=buildSkirmishDef(R.foes,R.diff,map,false);
     def.teams.forEach(t=>t.n=RULE_DEFAULT.start); // never the profile's custom RULES
   }
   SRND=null;
-  def.kind='gauntlet'; def.mIdx=null; def.title='GAUNTLET';
+  def.kind='gauntlet'; def.mIdx=null; def.title='GAUNTLET'; def.map=map;
   def.rules={...RULE_DEFAULT};
   def.rung=rung; def.perks=perks.slice();
   return def;
@@ -924,6 +932,7 @@ function newGame(def){
   S.rules=def.rules?{...def.rules}:{...RULE_DEFAULT};
   S.units=[]; S.parts=[]; S.tracers=[]; S.teams=[]; S.humans=[];
   S.time=0; S.timeLeft=def.time||0; S.obj=def.obj; S.over=false; S.paused=false;
+  S.runLow=1e9; // gauntlet debrief: army low-point (tracked after 10s grace)
   S.mission=def.mIdx!=null?def.mIdx:-1; S.pCaptured=false; S.cpMoved=0;
   S.hint=(def.mIdx===0&&!S.demo)?0:-1; S.hintT=0;
   S.walls=def.walls||[];
@@ -1343,11 +1352,14 @@ function checkEnd(){
     const r=GAUNT.run;
     if(!P.alive){ // permadeath: the run dies with the army
       const rung=r?r.rung:S.def.rung, rec=r&&r.rung>GAUNT.best;
+      if(r){gauntLogRung(P,false); gauntLast={log:r.log.slice(),perks:r.perks.slice()};}
       gauntEndRun();
       endGame(false,'RUN OVER','Fell on rung '+rung+'/'+GAUNT_LEN+
         (rec?' — deepest run yet.':'.'));
     } else if(alive.length===1&&alive[0]===P&&r){
+      gauntLogRung(P,true);
       if(r.rung>=GAUNT_LEN){
+        gauntLast={log:r.log.slice(),perks:r.perks.slice()};
         GAUNT.wins++; GAUNT.best=GAUNT_LEN; GAUNT.run=null;
         saveState(); syncGauntBtn();
         endGame(true,'GAUNTLET CONQUERED','All '+GAUNT_LEN+' rungs cleared · '+
@@ -1371,6 +1383,25 @@ function checkEnd(){
   }
 }
 /* ---------- gauntlet run flow ---------- */
+/* run debrief: one entry per rung fought, kept on the run (survives the
+   draft boundary + resume), shown on the end screen / Field Stats. Pure
+   playtest telemetry for tuning GAUNT_RUNGS/PERKDEF — nothing reads it. */
+let gauntLast=null; // debrief snapshot for the end screen (run just ended)
+function gauntLogRung(P,win){
+  const r=GAUNT.run; if(!r) return;
+  (r.log=r.log||[]).push({r:S.def.rung,map:S.def.map||'?',t:Math.round(S.time),
+    lost:P.losses,low:Math.min(S.runLow,S.ts[0].n),sup:S.ts[0].n,win});
+}
+function gauntDebriefHtml(d){
+  let h='<br><span style="color:#7f8ba3">— RUN DEBRIEF —</span><br>';
+  for(const e of d.log)
+    h+='R'+e.r+' '+String(e.map).toUpperCase().padEnd(9,' ')+' '+fmtT(e.t)+
+      ' · LOST '+e.lost+' · LOW '+e.low+(e.win?'':' ✝')+'<br>';
+  if(d.perks.length)
+    h+='PERKS: '+d.perks.map(id=>{const pd=PERKDEF.find(o=>o.id===id);
+      return pd?pd.name:id;}).join(', ');
+  return h;
+}
 function gauntEndRun(){ // run over (loss or forfeit): record the depth
   if(!GAUNT.run) return;
   GAUNT.best=Math.max(GAUNT.best,GAUNT.run.rung);
@@ -1413,7 +1444,9 @@ function endGame(win,title,sub){
   $('endSub').textContent=sub||'';
   $('endStats').innerHTML=(S.mode==='endless'&&S.ev?'WAVE '+S.ev.wave+' &nbsp;·&nbsp; ':'')+
     'TIME '+fmtT(S.time)+' &nbsp;·&nbsp; KILLS '+P.kills+
-    ' &nbsp;·&nbsp; LOSSES '+P.losses+'<br>MINERALS MINED '+Math.round(P.mined);
+    ' &nbsp;·&nbsp; LOSSES '+P.losses+'<br>MINERALS MINED '+Math.round(P.mined)+
+    (S.mode==='gauntlet'&&gauntLast?gauntDebriefHtml(gauntLast):'');
+  gauntLast=null;
   const next=win&&S.mission>=0&&S.mission<MISSIONS.length-1;
   if(win&&S.mission>=0&&S.mission+1>unlocked){unlocked=S.mission+1;saveState();}
   $('endNext').classList.toggle('hidden',!next);
@@ -1441,6 +1474,7 @@ function update(dt){
   for(const T of S.teams) if(T.stimT>0) T.stimT=Math.max(0,T.stimT-dt);
   moveKeyCp(dt);
   statsPass();
+  if(S.mode==='gauntlet'&&S.time>10&&S.ts[0].n<S.runLow) S.runLow=S.ts[0].n;
   waveDirector(dt);
   for(const T of S.teams) if(T.ai&&T.alive) aiThink(T,dt);
   updateUnits(dt);
@@ -1873,7 +1907,7 @@ const UI={
       gauntEndRun(); r=null;
       toast('PREVIOUS RUN LOST — BATTLE ABANDONED','#ff6a5e');
     }
-    if(!r){GAUNT.run=r={rung:1,perks:[],seed:(Math.random()*0x7fffffff)|0,ph:'in'};}
+    if(!r){GAUNT.run=r={rung:1,perks:[],log:[],seed:(Math.random()*0x7fffffff)|0,ph:'in'};}
     if(r.ph==='draft') showDraft(); else gauntStartBattle();},
   startVersus(){AudioSys.click();this.hideAll();newGame(buildVersusDef(VS.bots));},
   pause(){if(S.demo||S.over)return;AudioSys.click();S.paused=true;
@@ -1939,6 +1973,13 @@ const UI={
         if(S.mode==='gauntlet'&&S.def.perks&&S.def.perks.length)
           h+='PERKS: '+S.def.perks.map(id=>{const pd=PERKDEF.find(o=>o.id===id);
             return pd?pd.name:id;}).join(', ')+'<br>';
+        if(S.mode==='gauntlet'&&GAUNT.run){ // live run debrief so far
+          for(const e of (GAUNT.run.log||[]))
+            h+='R'+e.r+' '+String(e.map).toUpperCase()+' '+fmtT(e.t)+
+              ' · LOST '+e.lost+' · LOW '+e.low+'<br>';
+          h+='R'+S.def.rung+' (NOW) '+fmtT(S.time)+' · LOST '+T.losses+
+            ' · LOW '+(S.runLow>1e8?'—':S.runLow)+'<br>';
+        }
         h+='KILLS '+T.kills+' · LOSSES '+T.losses+' · MINED '+Math.round(T.mined)+
           ' · TIME '+fmtT(S.time)+'<br><br>';
       }

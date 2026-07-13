@@ -61,7 +61,17 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   on next Gauntlet start — the only resume point is `ph:'draft'`). Working
   state `GAUNT{run,wins,best}`, persisted per profile (`gaunt`/`gauntWins`/
   `gauntBest`, validated + unique-perk-deduped in `validProfile`); menu
-  button label via `syncGauntBtn`. Note for sims: the AI-vs-AI grid-finale
+  button label via `syncGauntBtn`. **Run debrief** (playtest telemetry for
+  tuning, nothing reads it): `gauntLogRung` pushes one entry per rung fought
+  onto `GAUNT.run.log` (map, clear time, losses, army low-point via
+  `S.runLow`, 10s grace); shown on the end screen (`gauntDebriefHtml` via
+  `gauntLast`) and live in Field Stats. Log persists with the run and is
+  sanitized in `validProfile`. Tuning fence agreed with the owner
+  (2026-07-13): adjust `GAUNT_RUNGS` contents, `PERKDEF` numbers, finale
+  knobs; do NOT touch run length, draft structure, or anything that leaks
+  outside Gauntlet (`CFG`/`STAT`/`DIFF`). Target curve: rungs 1–2 near-
+  guaranteed, typical runs die at 3–5, finale clearly hardest, full clear
+  ~25–35 min, no rung past ~7 min. Note for sims: the AI-vs-AI grid-finale
   seesaw applies here too, and a hard-AI proxy only wins ~65% of rung 1 —
   that's baseline AI-vs-AI variance (measured identical on plain skirmish),
   not a Gauntlet bug; humans do much better.
