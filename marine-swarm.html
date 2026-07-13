@@ -151,6 +151,10 @@
   .embB{width:46px;height:46px;background:#101724;border:1px solid #2b3a55;cursor:pointer;
     display:flex;align-items:center;justify-content:center;padding:0}
   .embB.on{border-color:#ffb454;background:#1d2a40}
+  /* gauntlet draft */
+  #draftList{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;width:min(92vw,640px)}
+  #draftList .card .s{color:#aebad2;line-height:1.45}
+  #draftList .card:active{background:#1d2a40}
 </style>
 </head>
 <body>
@@ -183,6 +187,8 @@
   <div style="height:6px"></div>
   <button class="mbtn hot" onclick="UI.go('scrCampaign')">Campaign</button>
   <button class="mbtn" onclick="UI.go('scrSkirmish')">Skirmish</button>
+  <button class="mbtn" id="btnEndless" onclick="UI.startEndless()">Endless</button>
+  <button class="mbtn" id="btnGaunt" onclick="UI.startGauntlet()">Gauntlet</button>
   <button class="mbtn" onclick="UI.go('scrVersus')">Versus · 2P</button>
   <button class="mbtn" onclick="UI.go('scrHelp')">How to Play</button>
   <div class="foot">HOLD &amp; DRAG TO COMMAND · SINGLE-FILE HTML5</div>
@@ -266,6 +272,14 @@
   <button class="mbtn small" onclick="UI.profCancel()">Cancel</button>
 </div>
 
+<!-- GAUNTLET DRAFT -->
+<div id="scrDraft" class="screen hidden">
+  <div class="eyebrow" id="draftSub">Rung 1 clear</div>
+  <h2 class="sh">Choose a Perk</h2>
+  <div id="draftList"></div>
+  <div class="foot">PERKS LAST THE WHOLE RUN · NO REROLL</div>
+</div>
+
 <!-- HELP -->
 <div id="scrHelp" class="screen hidden">
   <h2 class="sh">Field Manual</h2>
@@ -276,6 +290,8 @@
     <b>UPGRADES</b> — Spend minerals in the bottom tray (keys <span class="keycap">1</span>–<span class="keycap">7</span>): damage, fire rate, speed, range, armor, reinforce speed, supply cap.<br><br>
     <b>STIMPACK</b> — Unlock the combat stim (key <span class="keycap">8</span>), then fire it with <span class="keycap">8</span> or <span class="keycap">SPACE</span>: every marine trades a slice of health (never fatal) for a burst of fire rate and speed.<br><br>
     <b>ABSORB</b> — Surround isolated enemies. Marines cut off and outnumbered may defect to your side when they fall.<br><br>
+    <b>ENDLESS</b> — Hold the sector against ever-bigger Horde waves. Each wave is announced with its direction — retake pads and buy upgrades in the lull. The Horde takes ground only to starve you; survive as many waves as you can.<br><br>
+    <b>GAUNTLET</b> — A run of eight battles, each rung harder than the last. Win a rung, draft one of three perks — they last the whole run. Lose once, or walk out of a fight, and the run is over. Clear the finale to conquer the Gauntlet.<br><br>
     <b>DEFEAT</b> — Lose every marine and every pad and you're out. Same goes for them.
   </div>
   <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
@@ -285,7 +301,7 @@
 <div id="scrPause" class="screen hidden">
   <h2 class="sh">Paused</h2>
   <button class="mbtn hot" onclick="UI.resume()">Resume</button>
-  <button class="mbtn" onclick="UI.restart()">Restart</button>
+  <button class="mbtn" id="btnRestartP" onclick="UI.restart()">Restart</button>
   <button class="mbtn" id="btnSoundP" onclick="UI.toggleSound()">Sound: On</button>
   <button class="mbtn" id="btnDebugP" onclick="UI.toggleDebug()">Debug: Off</button>
   <button class="mbtn" onclick="UI.stats()">Field Stats</button>
@@ -300,7 +316,7 @@
   <div class="eyebrow" id="endSub"></div>
   <div id="endStats"></div>
   <button class="mbtn hot hidden" id="endNext" onclick="UI.nextMission()">Next Mission</button>
-  <button class="mbtn" onclick="UI.restart()">Retry</button>
+  <button class="mbtn" id="btnEndRetry" onclick="UI.restart()">Retry</button>
   <button class="mbtn small" onclick="UI.quit()">Menu</button>
 </div>
 
@@ -318,8 +334,17 @@ const TAU = Math.PI*2;
 const $ = id => document.getElementById(id);
 const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
 const lerp=(a,b,t)=>a+(b-a)*t;
-const rnd=(a,b)=>a+Math.random()*(b-a);
+/* SRND: scoped seeded-RNG override. Gauntlet def builders set it so a run's
+   battles derive deterministically from the run seed (ADR 0003); everything
+   else (combat jitter, fx) keeps using Math.random. Always reset to null. */
+let SRND=null;
+const rnd=(a,b)=>a+(SRND?SRND():Math.random())*(b-a);
 const rndi=(a,b)=>Math.floor(rnd(a,b+1));
+function sRng(seed){ // mulberry32
+  let s=seed>>>0;
+  return ()=>{s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296;};
+}
 const d2=(a,b)=>{const x=a.x-b.x,y=a.y-b.y;return x*x+y*y};
 const fmtT=s=>{s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 
@@ -382,15 +407,25 @@ const RULEDEF=[
   {k:'inc',  name:'MINERAL INCOME', vals:[.5,.75,1,1.5,2,3],x:1,
    d:'Multiplies mineral income mined by captured pads.'},
 ];
+/* t.pk = per-team perk modifiers (Gauntlet); every team gets neutral
+   defaults in newGame, so pk multiplies in exactly like S.rules does. */
 const STAT = {
-  dmg:t=>CFG.dmg*(1+.25*t.up.dmg)*S.rules.dmg,
-  rof:t=>CFG.rof/((1+.16*t.up.rof)*S.rules.rof*(t.stimT>0?CFG.stimRof:1)),
-  spd:t=>CFG.spd*(1+.10*t.up.spd)*S.rules.spd*(t.stimT>0?CFG.stimSpd:1),
-  rng:t=>CFG.rng*(1+.08*t.up.rng)*S.rules.rng,
-  hp: t=>CFG.hp *(1+.22*t.up.hp)*S.rules.hp,
-  spw:t=>CFG.spw/((1+.15*t.up.spw)*S.rules.spw),
-  sup:t=>S.rules.sup+CFG.supAdd*t.up.sup,
+  dmg:t=>CFG.dmg*(1+.25*t.up.dmg)*S.rules.dmg*t.pk.dmg,
+  rof:t=>CFG.rof/((1+.16*t.up.rof)*S.rules.rof*t.pk.rof*(t.stimT>0?CFG.stimRof:1)),
+  spd:t=>CFG.spd*(1+.10*t.up.spd)*S.rules.spd*t.pk.spd*(t.stimT>0?CFG.stimSpd:1),
+  rng:t=>CFG.rng*(1+.08*t.up.rng)*S.rules.rng*t.pk.rng,
+  hp: t=>CFG.hp *(1+.22*t.up.hp)*S.rules.hp*t.pk.hp,
+  spw:t=>CFG.spw/((1+.15*t.up.spw)*S.rules.spw*t.pk.spw),
+  sup:t=>S.rules.sup+CFG.supAdd*t.up.sup+t.pk.supAdd,
 };
+const mkPk=()=>({dmg:1,rof:1,spd:1,rng:1,hp:1,spw:1,supAdd:0,inc:1,killB:0,
+  cap:1,convN:5,convP:.55,stimFree:0,stimHp:1,startMin:0,preDmg:0,preHp:0});
+function applyPerks(T,ids){
+  for(const id of ids){const pd=PERKDEF.find(p=>p.id===id); if(pd)pd.ap(T.pk);}
+  if(T.pk.stimFree)T.stimOwn=true;
+  T.min+=T.pk.startMin;
+  T.up.dmg+=T.pk.preDmg; T.up.hp+=T.pk.preHp;
+}
 const PALETTE=['#3d9bff','#ff4d4d','#35d69a','#b678ff','#ffc247','#7ee04e'].map(mkCol);
 const TNAME=['COBALT','CRIMSON','VIRIDIAN','VIOLET','AMBER','JADE'];
 const DIFF={
@@ -408,6 +443,61 @@ const PERS={
   eco: ['spw','sup','hp','dmg','rof','stim','rng','spd'],
   bal: ['dmg','spw','rof','stim','sup','hp','spd','rng'],
 };
+/* Endless mode wave director (see docs/adr/0002). The Horde is a real team
+   with income & pad benefits zeroed; waves are its only unit source. */
+const EV_CFG={
+  lull1:9, lull:18,            // first / standard lull length (s)
+  waveMax:70,                  // straggler guard: max assault length (s)
+  dirs:['WEST','NORTH','EAST','SOUTH'],
+  hordeUps:['hp','dmg','rof','spd','rng'], // per-wave upgrade grant cycle
+};
+const waveSize=n=>Math.round(8+n*2+n*n*.12);
+
+/* Gauntlet (see docs/adr/0003 + CONTEXT.md: Gauntlet/Run/Rung/Perk/Draft/
+   Finale). A run = GAUNT_RUNGS.length+1 battles; each rung is an ordinary
+   skirmish def picked deterministically from the run seed, the finale is a
+   grid reclamation. Perks are run-long player-only modifiers folded into
+   T.pk multipliers. Always RULE_DEFAULT — custom Battle Rules never apply. */
+const GAUNT_LEN=8;
+const GAUNT_RUNGS=[ // rungs 1..7; rung 8 is the finale
+  {foes:1,diff:'easy',  maps:['open']},
+  {foes:1,diff:'normal',maps:['open','scatter']},
+  {foes:2,diff:'normal',maps:['open','scatter','corridors']},
+  {foes:2,diff:'normal',maps:['open','scatter','corridors','grid']},
+  {foes:2,diff:'hard',  maps:['open','scatter','corridors']},
+  {foes:3,diff:'hard',  maps:['open','scatter','corridors','grid']},
+  {foes:4,diff:'hard',  maps:['open','scatter','corridors']},
+];
+/* st:1 = stackable stat perk (can be drafted repeatedly); the rest are
+   unique rule-benders. ap() mutates a team's pk modifier object only —
+   team-level effects (free stim, starting minerals, free levels) are read
+   off pk by applyPerks. */
+const PERKDEF=[
+  {id:'dmg', st:1,name:'HOT LOADS',     d:'+15% weapon damage.',            ap:pk=>pk.dmg*=1.15},
+  {id:'rof', st:1,name:'RAPID CYCLING', d:'+12% rate of fire.',             ap:pk=>pk.rof*=1.12},
+  {id:'spd', st:1,name:'SERVO LEGS',    d:'+10% move speed.',               ap:pk=>pk.spd*=1.10},
+  {id:'rng', st:1,name:'LONG BARRELS',  d:'+10% weapon range.',             ap:pk=>pk.rng*=1.10},
+  {id:'hp',  st:1,name:'PLATE CARRIERS',d:'+15% marine HP.',                ap:pk=>pk.hp*=1.15},
+  {id:'spw', st:1,name:'DROP RIGS',     d:'+15% pad deploy speed.',         ap:pk=>pk.spw*=1.15},
+  {id:'sup', st:1,name:'BARRACKS WING', d:'+6 supply cap.',                 ap:pk=>pk.supAdd+=6},
+  {id:'inc', st:1,name:'DEEP MINES',    d:'+20% mineral income.',           ap:pk=>pk.inc*=1.20},
+  {id:'kill',st:1,name:'SALVAGE TEAMS', d:'+3 minerals per kill.',          ap:pk=>pk.killB+=3},
+  {id:'conv',name:'PRESS GANGS',
+   d:'Surrounded enemies defect far more readily — outnumber 3:1 near just 3 of yours, 85% chance.',
+   ap:pk=>{pk.convN=3;pk.convP=.85;}},
+  {id:'stim',name:'FIELD STIMS',
+   d:'Stimpack comes pre-unlocked every battle, and Stim costs marines half the HP.',
+   ap:pk=>{pk.stimFree=1;pk.stimHp=.5;}},
+  {id:'cap', name:'PATHFINDERS',
+   d:'Pads and cells flip 50% faster in your favor.',
+   ap:pk=>pk.cap*=1.5},
+  {id:'bank',name:'WAR CHEST',
+   d:'Start every battle with +150 minerals.',
+   ap:pk=>pk.startMin+=150},
+  {id:'vet', name:'VETERAN CADRE',
+   d:'Start every battle with a free DAMAGE and ARMOR level.',
+   ap:pk=>{pk.preDmg+=1;pk.preHp+=1;}},
+];
 
 /* ---------- audio (procedural WebAudio) ---------- */
 const AudioSys={ac:null,mg:null,on:true,nb:null,shots:0,
@@ -444,6 +534,7 @@ const AudioSys={ac:null,mg:null,on:true,nb:null,shots:0,
   upg(){ this.tone(440,440,.06,'square',.05); this.tone(659,659,.08,'square',.05,.05); },
   stim(){ this.noise(.18,.07,900,.9); this.tone(220,540,.22,'sawtooth',.06); },
   click(){ this.tone(950,700,.035,'square',.03); },
+  wave(){ this.tone(160,60,.4,'sawtooth',.07); this.noise(.3,.05,500,.8); },
   win(){ [440,554,659,880].forEach((f,i)=>this.tone(f,f,.14,'square',.06,i*.11)); },
   lose(){ this.tone(300,300,.2,'sawtooth',.06); this.tone(210,150,.4,'sawtooth',.06,.18); },
 };
@@ -546,11 +637,17 @@ const GRID={cs:52,cw:0,ch:0,cells:[],
 /* ---------- game state ---------- */
 const S={mode:'menu',def:null,mapW:1600,mapH:1000,teams:[],units:[],zones:[],walls:[],
   parts:[],tracers:[],humans:[],zc:[],zcW:[],ts:[],time:0,timeLeft:0,obj:null,grid:null,
+  ev:null,horde:-1,
   rules:{...RULE_DEFAULT},
   paused:false,over:false,demo:false,mission:-1,pCaptured:false,cpMoved:0,hint:-1,hintT:0,shake:0};
 let unlocked=0, DBG=false, soundOn=true;
 const SK={foes:2,diff:'normal',map:'open'};
 const VS={bots:0};
+/* Gauntlet working state (per profile, like unlocked/RULES/SK/VS).
+   run = {rung,perks,seed,ph} or null; ph 'in' = a battle was in progress
+   (resuming it would be retry-scumming, so it forfeits the run),
+   ph 'draft' = won the rung, pick pending — the only resume point. */
+const GAUNT={run:null,wins:0,best:0};
 
 /* ---------- profiles & persistence (localStorage, best-effort) ----------
    A profile is a local per-device identity: name + color + emblem plus that
@@ -560,16 +657,21 @@ const VS={bots:0};
    the active profile into them, stashProfile() writes them back. */
 const SAVE_KEY='ms_save_v2', SAVE_KEY_V1='ms_save_v1', MAXPROF=8;
 function mkProfile(name,col,emb){
-  return {name:name||'COMMANDER',col:col||0,emb:emb||0,unlocked:0,
+  return {name:name||'COMMANDER',col:col||0,emb:emb||0,unlocked:0,endlessBest:0,
+    gaunt:null,gauntWins:0,gauntBest:0,
     rules:{...RULE_DEFAULT},sk:{foes:2,diff:'normal',map:'open'},vs:{bots:0}};
 }
 const PROFILES={list:[mkProfile()],active:0};
 const prof=()=>PROFILES.list[PROFILES.active];
 function applyProfile(){const p=prof();
   unlocked=p.unlocked; Object.assign(RULES,RULE_DEFAULT,p.rules);
-  Object.assign(SK,p.sk); Object.assign(VS,p.vs);}
+  Object.assign(SK,p.sk); Object.assign(VS,p.vs);
+  GAUNT.run=p.gaunt?{...p.gaunt,perks:p.gaunt.perks.slice()}:null;
+  GAUNT.wins=p.gauntWins||0; GAUNT.best=p.gauntBest||0;}
 function stashProfile(){const p=prof();
-  p.unlocked=unlocked; p.rules={...RULES}; p.sk={...SK}; p.vs={...VS};}
+  p.unlocked=unlocked; p.rules={...RULES}; p.sk={...SK}; p.vs={...VS};
+  p.gaunt=GAUNT.run?{...GAUNT.run,perks:GAUNT.run.perks.slice()}:null;
+  p.gauntWins=GAUNT.wins; p.gauntBest=GAUNT.best;}
 function validProfile(d){
   if(!d||typeof d!=='object')return null;
   const p=mkProfile();
@@ -577,6 +679,19 @@ function validProfile(d){
   if(Number.isInteger(d.col)&&d.col>=0&&d.col<PALETTE.length)p.col=d.col;
   if(Number.isInteger(d.emb)&&d.emb>=0&&d.emb<NEMB)p.emb=d.emb;
   if(Number.isInteger(d.unlocked))p.unlocked=clamp(d.unlocked,0,MISSIONS.length);
+  if(Number.isInteger(d.endlessBest)&&d.endlessBest>=0)p.endlessBest=d.endlessBest;
+  if(Number.isInteger(d.gauntWins)&&d.gauntWins>=0)p.gauntWins=d.gauntWins;
+  if(Number.isInteger(d.gauntBest))p.gauntBest=clamp(d.gauntBest,0,GAUNT_LEN);
+  const g=d.gaunt;
+  if(g&&typeof g==='object'&&Number.isInteger(g.rung)&&g.rung>=1&&g.rung<=GAUNT_LEN
+     &&Number.isInteger(g.seed)&&['in','draft'].includes(g.ph)&&Array.isArray(g.perks)){
+    const seen=new Set();
+    const perks=g.perks.slice(0,16).filter(id=>{
+      const pd=PERKDEF.find(o=>o.id===id); if(!pd)return false;
+      if(!pd.st){if(seen.has(id))return false; seen.add(id);}
+      return true;});
+    p.gaunt={rung:g.rung,seed:g.seed,ph:g.ph,perks};
+  }
   if(d.rules&&typeof d.rules==='object')
     for(const rd of RULEDEF) if(rd.vals.includes(d.rules[rd.k])) p.rules[rd.k]=d.rules[rd.k];
   if(d.sk&&typeof d.sk==='object'){
@@ -651,7 +766,8 @@ const MISSIONS=[
   f:[{z:1,d:'brutal',n:20,c:1,pr:'rush',pre:{dmg:1,rof:1,hp:1}},
      {z:2,d:'hard',n:10,c:3,pr:'eco'},{z:3,d:'hard',n:10,c:4,pr:'bal'}], obj:{t:'elim'}},
 ];
-const OBJTXT=o=>o.t==='elim'?'ELIMINATE ALL HOSTILES':(o.t==='survive'?'SURVIVE':'CAPTURE ALL PADS');
+const OBJTXT=o=>o.t==='elim'?'ELIMINATE ALL HOSTILES':(o.t==='survive'?'SURVIVE':
+  (o.t==='endless'?'SURVIVE THE WAVES':'CAPTURE ALL PADS'));
 
 function mapDims(){const cw=window.innerWidth||900, ch=window.innerHeight||600;
   S.mapH=1000; S.mapW=clamp(Math.round(1000*cw/Math.max(1,ch)),640,1900);}
@@ -760,6 +876,47 @@ function buildVersusDef(bots){
     teams.push({col:al(3),human:false,zone:zones.length-1,n:Math.max(5,Math.round(st*.6)),diff:'bot',pers:'rush'});}
   return {kind:'versus',zones,walls:[],teams,obj:{t:'elim'},time:0,title:'VERSUS',rules:{...RULES}};
 }
+/* endless: one dedicated survival map — big home pad center, six-pad ring,
+   Horde waves from the edges. Always RULE_DEFAULT (scores stay comparable). */
+function buildEndlessDef(){
+  mapDims();
+  const zones=[{x:.5*S.mapW,y:.5*S.mapH,big:true}];
+  for(let i=0;i<6;i++){const a=-Math.PI/2+i*TAU/6;
+    zones.push({x:(.5+.30*Math.cos(a))*S.mapW,y:(.5+.32*Math.sin(a))*S.mapH,big:false});}
+  const al=colAlloc();
+  const teams=[{col:al(prof().col),human:true,zone:0,n:RULE_DEFAULT.start},
+    {col:al(1),human:false,zone:null,n:0,horde:true}];
+  return {kind:'endless',zones,walls:[],teams,obj:{t:'endless'},time:0,title:'ENDLESS',
+    rules:{...RULE_DEFAULT}};
+}
+/* gauntlet rungs are plain skirmish defs (finale: grid reclamation) picked
+   deterministically from seed+rung; always RULE_DEFAULT (ADR 0003) */
+function buildGauntletDef(rung,seed,perks){
+  SRND=sRng((seed^Math.imul(rung,0x9E3779B9))>>>0);
+  let def;
+  if(rung>=GAUNT_LEN){
+    mapDims();
+    def=buildGridMissionDef(-1,{t:'FINALE',foesOwn:.66,p:{n:14},
+      f:[{d:'hard',n:12,c:1,pr:'rush'},{d:'hard',n:12,c:3,pr:'eco'}],obj:{t:'elim'}});
+  } else {
+    const R=GAUNT_RUNGS[rung-1];
+    def=buildSkirmishDef(R.foes,R.diff,R.maps[(SRND()*R.maps.length)|0],false);
+    def.teams.forEach(t=>t.n=RULE_DEFAULT.start); // never the profile's custom RULES
+  }
+  SRND=null;
+  def.kind='gauntlet'; def.mIdx=null; def.title='GAUNTLET';
+  def.rules={...RULE_DEFAULT};
+  def.rung=rung; def.perks=perks.slice();
+  return def;
+}
+/* the draft's three offers, deterministic from seed+rung+owned uniques */
+function gauntOffers(r){
+  const rng=sRng((r.seed^Math.imul(r.rung,0x85EBCA6B)^0x5F356495)>>>0);
+  const elig=PERKDEF.filter(p=>p.st||!r.perks.includes(p.id));
+  const out=[];
+  while(out.length<3&&elig.length) out.push(elig.splice((rng()*elig.length)|0,1)[0]);
+  return out;
+}
 
 /* ---------- game construction ---------- */
 function newGame(def){
@@ -781,22 +938,28 @@ function newGame(def){
     sm:z.cell?1/cellW:(z.big?.72:1),
     owner:-1,capT:-1,prog:0,st:rnd(.5,2)}));
   def.teams.forEach((td,i)=>{
-    const T={id:i,col:td.col,human:!!td.human,min:S.demo?40:30,mined:0,kills:0,losses:0,
+    const T={id:i,col:td.col,human:!!td.human,horde:!!td.horde,min:S.demo?40:30,mined:0,kills:0,losses:0,
       up:{dmg:0,rof:0,spd:0,rng:0,hp:0,spw:0,sup:0},alive:true,hold:false,
-      stimOwn:false,stimT:0,
+      stimOwn:false,stimT:0,pk:mkPk(),
       cp:{x:0,y:0},diff:td.diff||null,pers:td.pers||'bal',
       ai:td.human?null:{t:rnd(.3,1.2)}};
     if(td.pre) for(const k in td.pre) T.up[k]=td.pre[k];
     if(T.diff){const d=DIFF[T.diff],order=PERS[T.pers];
       for(let p=0;p<d.pre;p++) T.up[order[p%order.length]]++;}
+    if(def.perks&&T.human) applyPerks(T,def.perks); // gauntlet build, pre-spawn
     S.teams.push(T);
     if(T.human) S.humans.push(i);
-    const hz=S.zones[td.zone]; hz.owner=i; hz.prog=1; hz.homeOf=i;
-    T.cp.x=hz.x; T.cp.y=hz.y;
+    if(td.zone!=null){ // the Horde has no home pad — it arrives, it doesn't live here
+      const hz=S.zones[td.zone]; hz.owner=i; hz.prog=1; hz.homeOf=i;
+      T.cp.x=hz.x; T.cp.y=hz.y;
+      for(let u=0;u<td.n;u++){const a=u/td.n*TAU;
+        spawnUnit(i,hz.x+Math.cos(a)*rnd(16,34),hz.y+Math.sin(a)*rnd(16,34),false);}
+    } else { T.cp.x=S.mapW/2; T.cp.y=S.mapH/2; }
     (td.own||[]).forEach(zi=>{S.zones[zi].owner=i;S.zones[zi].prog=1;});
-    for(let u=0;u<td.n;u++){const a=u/td.n*TAU;
-      spawnUnit(i,hz.x+Math.cos(a)*rnd(16,34),hz.y+Math.sin(a)*rnd(16,34),false);}
   });
+  S.horde=S.teams.findIndex(T=>T.horde);
+  S.ev=def.kind==='endless'
+    ?{wave:0,state:'lull',t:EV_CFG.lull1,dir:rndi(0,3),maxT:0}:null;
   const nt=S.teams.length;
   S.zc=S.zones.map(()=>new Array(nt).fill(0));
   S.zcW=S.zones.map(()=>new Array(nt).fill(0));
@@ -835,7 +998,7 @@ function doStim(ti){
   T.stimT=CFG.stimDur;
   const C=PALETTE[T.col];
   for(const u of S.units) if(u.team===ti&&!u.dead){
-    u.hp=Math.max(1,u.hp-CFG.stimHp);
+    u.hp=Math.max(1,u.hp-CFG.stimHp*T.pk.stimHp);
     part(2,u.x+rnd(-3,3),u.y+rnd(-3,3),'#ff6a5e');
   }
   part(3,S.ts[ti].cx,S.ts[ti].cy,'#ff6a5e',14,60);
@@ -959,14 +1122,15 @@ function fire(u,v,T){
 function processDeaths(){
   for(const D of deaths){
     const v=D.u, by=D.by, KT=S.teams[by], VT=S.teams[v.team];
-    KT.min+=CFG.killB; KT.mined+=CFG.killB; KT.kills++; VT.losses++;
+    const kb=CFG.killB+KT.pk.killB;
+    KT.min+=kb; KT.mined+=kb; KT.kills++; VT.losses++;
     // absorb: heavily surrounded lone units defect
     let k=0,vv=0;
     GRID.each(v.x,v.y,CFG.convertR,o=>{
       if(o.dead||o===v) return false;
       if(o.team===by)k++; else if(o.team===v.team)vv++;
       return false;});
-    if(k>=5&&k>=vv*3&&S.ts[by].n<STAT.sup(KT)&&S.units.length<S.rules.cap&&Math.random()<.55){
+    if(k>=KT.pk.convN&&k>=vv*3&&S.ts[by].n<STAT.sup(KT)&&S.units.length<S.rules.cap&&Math.random()<KT.pk.convP){
       spawnUnit(by,v.x,v.y,false);
       part(3,v.x,v.y,PALETTE[KT.col].light,6,30);
       part(3,v.x,v.y,'#ffffff',3,18);
@@ -989,7 +1153,7 @@ function updateZones(dt){
       if(n>bn){sn=bn;bn=n;b=t;} else if(n>sn)sn=n;}
     const net=Math.min(8,bn-sn);
     if(bn>0&&net>0){
-      const rate=net*CFG.capRate*dt*(Z.cell?CFG.cellCapMult:1);
+      const rate=net*CFG.capRate*dt*(Z.cell?CFG.cellCapMult:1)*S.teams[b].pk.cap;
       if(Z.owner===-1){
         if(Z.capT!==b){Z.prog-=rate; if(Z.prog<=0){Z.capT=b;Z.prog=0;}}
         else{Z.prog+=rate;
@@ -1001,17 +1165,19 @@ function updateZones(dt){
     if(Z.owner>=0){
       const T=S.teams[Z.owner];
       ownW[Z.owner]++; incW[Z.owner]+=Z.w;
-      Z.st-=dt;
-      if(Z.st<=0){
-        if(S.ts[Z.owner].n<STAT.sup(T)&&S.units.length<S.rules.cap){
-          Z.st+=STAT.spw(T)*Z.sm;
-          spawnUnit(Z.owner,Z.x+rnd(-14,14),Z.y+rnd(-14,14));
-        } else Z.st=.4;
+      if(!T.horde){ // denial capture: Horde pads never mine or deploy
+        Z.st-=dt;
+        if(Z.st<=0){
+          if(S.ts[Z.owner].n<STAT.sup(T)&&S.units.length<S.rules.cap){
+            Z.st+=STAT.spw(T)*Z.sm;
+            spawnUnit(Z.owner,Z.x+rnd(-14,14),Z.y+rnd(-14,14));
+          } else Z.st=.4;
+        }
       }
     }
   }
-  for(let t=0;t<nt;t++){const T=S.teams[t]; if(!T.alive) continue;
-    const mult=(T.diff?DIFF[T.diff].inc:1)*S.rules.inc;
+  for(let t=0;t<nt;t++){const T=S.teams[t]; if(!T.alive||T.horde) continue;
+    const mult=(T.diff?DIFF[T.diff].inc:1)*S.rules.inc*T.pk.inc;
     const inc=dt*(CFG.incBase+incW[t]*CFG.incZone)*mult;
     T.min+=inc; T.mined+=inc;
   }
@@ -1036,6 +1202,17 @@ function aiThink(T,dt){
   A.t=d.react*rnd(.8,1.25);
   const me=S.ts[T.id], nt=S.teams.length;
   if(me.n===0) return;
+  if(T.horde){ // waves seek the nearest player pad, or the army itself
+    let bx=S.mapW/2,by=S.mapH/2,bd=Infinity;
+    const ph=S.ts[0];
+    if(ph&&ph.n){bx=ph.cx;by=ph.cy;
+      const dx=bx-me.cx,dy=by-me.cy;bd=dx*dx+dy*dy;}
+    for(const Z of S.zones){ if(Z.owner!==0) continue;
+      const dx=Z.x-me.cx,dy=Z.y-me.cy,dd=dx*dx+dy*dy;
+      if(dd<bd){bd=dd;bx=Z.x;by=Z.y;}}
+    T.cp.x=bx+rnd(-24,24); T.cp.y=by+rnd(-24,24);
+    return;
+  }
   // stim when a real fight is starting and the army can afford the hp
   if(T.stimOwn&&T.stimT<=0){
     let near=0; GRID.each(me.cx,me.cy,170,o=>{
@@ -1093,11 +1270,53 @@ function updateFx(dt){
   for(let i=S.tracers.length-1;i>=0;i--){const t=S.tracers[i];
     t.life-=dt; if(t.life<=0){S.tracers[i]=S.tracers[S.tracers.length-1];S.tracers.pop();}}
 }
+/* ---------- endless wave director ---------- */
+function hordeUpg(n){ // one combat level per wave past the first, cycling
+  if(n<2) return;
+  const H=S.teams[S.horde], ord=EV_CFG.hordeUps;
+  for(let i=0;i<ord.length;i++){
+    const k=ord[(n-2+i)%ord.length], u=UPGDEF.find(o=>o.k===k);
+    if(H.up[k]<u.max){H.up[k]++; return;}
+  }
+}
+function spawnWave(){
+  const E=S.ev, H=S.teams[S.horde];
+  E.wave++; hordeUpg(E.wave);
+  E.state='assault'; E.maxT=EV_CFG.waveMax;
+  const room=Math.max(0,S.rules.cap-S.units.length);
+  const c=Math.min(waveSize(E.wave),room), d=E.dir, m=18;
+  for(let i=0;i<c;i++){
+    const f=.25+.5*(c===1?.5:i/(c-1)); // spread over middle half of the edge
+    let x,y;
+    if(d===0){x=m;y=f*S.mapH;} else if(d===2){x=S.mapW-m;y=f*S.mapH;}
+    else if(d===1){y=m;x=f*S.mapW;} else {y=S.mapH-m;x=f*S.mapW;}
+    spawnUnit(S.horde,x+rnd(-8,8),y+rnd(-8,8),i%4===0);
+  }
+  const ph=S.ts[0];
+  H.cp.x=ph.n?ph.cx:S.mapW/2; H.cp.y=ph.n?ph.cy:S.mapH/2;
+  toast('WAVE '+E.wave+' — '+EV_CFG.dirs[d],PALETTE[H.col].main);
+  AudioSys.wave();
+}
+function startLull(cleared){
+  const E=S.ev;
+  E.state='lull'; E.t=EV_CFG.lull; E.dir=rndi(0,3);
+  if(cleared&&E.wave>0) toast('WAVE '+E.wave+' CLEARED','#7ee08c');
+}
+function waveDirector(dt){
+  const E=S.ev; if(!E||S.over) return;
+  if(E.state==='lull'){
+    E.t-=dt; if(E.t<=0) spawnWave();
+  } else {
+    E.maxT-=dt;
+    if(S.ts[S.horde].n===0) startLull(true);          // wave wiped or defected
+    else if(E.maxT<=0) startLull(false);              // straggler guard
+  }
+}
 /* ---------- objectives / end ---------- */
 function checkEnd(){
   const nt=S.teams.length;
   for(let t=0;t<nt;t++){const T=S.teams[t];
-    if(!T.alive) continue;
+    if(!T.alive||T.horde) continue; // an empty Horde mid-lull isn't eliminated
     if(S.ts[t].n===0&&ownW[t]===0){T.alive=false;
       if(!S.demo)toast(TNAME[T.col]+' ELIMINATED',PALETTE[T.col].main);}}
   const alive=S.teams.filter(t=>t.alive);
@@ -1111,6 +1330,36 @@ function checkEnd(){
     return;
   }
   const P=S.teams[0];
+  if(S.mode==='endless'){
+    if(!P.alive){
+      const w=S.ev?S.ev.wave:0, p=prof(), rec=w>(p.endlessBest||0);
+      if(rec){p.endlessBest=w;saveState();syncEndlessBtn();}
+      endGame(false,'RUN OVER',(rec?'NEW RECORD — ':'')+
+        'You held for '+w+' wave'+(w===1?'':'s')+' · Best '+p.endlessBest+'.');
+    }
+    return;
+  }
+  if(S.mode==='gauntlet'){
+    const r=GAUNT.run;
+    if(!P.alive){ // permadeath: the run dies with the army
+      const rung=r?r.rung:S.def.rung, rec=r&&r.rung>GAUNT.best;
+      gauntEndRun();
+      endGame(false,'RUN OVER','Fell on rung '+rung+'/'+GAUNT_LEN+
+        (rec?' — deepest run yet.':'.'));
+    } else if(alive.length===1&&alive[0]===P&&r){
+      if(r.rung>=GAUNT_LEN){
+        GAUNT.wins++; GAUNT.best=GAUNT_LEN; GAUNT.run=null;
+        saveState(); syncGauntBtn();
+        endGame(true,'GAUNTLET CONQUERED','All '+GAUNT_LEN+' rungs cleared · '+
+          GAUNT.wins+' run'+(GAUNT.wins===1?'':'s')+' won.');
+      } else { // rung clear → draft (the run's only save/resume point)
+        S.over=true; r.ph='draft'; saveState();
+        AudioSys.win();
+        setTimeout(()=>showDraft(),650);
+      }
+    }
+    return;
+  }
   if(!P.alive){endGame(false,'DEFEAT','Your force was wiped out.');return;}
   if(S.obj.t==='elim'){
     if(alive.length===1&&alive[0]===P) endGame(true,'VICTORY','All hostiles eliminated.');
@@ -1121,6 +1370,40 @@ function checkEnd(){
     if(S.timeLeft<=0) endGame(true,'VICTORY','Reinforcements have arrived.');
   }
 }
+/* ---------- gauntlet run flow ---------- */
+function gauntEndRun(){ // run over (loss or forfeit): record the depth
+  if(!GAUNT.run) return;
+  GAUNT.best=Math.max(GAUNT.best,GAUNT.run.rung);
+  GAUNT.run=null; saveState(); syncGauntBtn();
+}
+function gauntStartBattle(){
+  const r=GAUNT.run; r.ph='in'; saveState(); syncGauntBtn();
+  UI.hideAll(); newGame(buildGauntletDef(r.rung,r.seed,r.perks));
+  toast('RUNG '+r.rung+'/'+GAUNT_LEN+(r.rung>=GAUNT_LEN?' — FINALE':''),
+    PALETTE[S.teams[0].col].main);
+}
+function showDraft(){
+  const r=GAUNT.run; if(!r){startMenu();return;}
+  $('draftSub').textContent='RUNG '+r.rung+' CLEAR — '+(GAUNT_LEN-r.rung)+' TO GO';
+  const list=$('draftList'); list.innerHTML='';
+  gauntOffers(r).forEach(pd=>{
+    const owned=r.perks.filter(x=>x===pd.id).length;
+    const c=document.createElement('div'); c.className='card';
+    c.innerHTML='<div class="n">'+(pd.st?'STAT'+(owned?' · OWNED ×'+owned:''):'UNIQUE')+
+      '</div><div class="t">'+pd.name+'</div><div class="s">'+pd.d+'</div>';
+    c.addEventListener('click',()=>{AudioSys.click();
+      r.perks.push(pd.id); r.rung++;
+      gauntStartBattle();});
+    list.appendChild(c);
+  });
+  UI.show('scrDraft');
+}
+function syncGauntBtn(){
+  const b=$('btnGaunt'); if(!b) return;
+  const r=GAUNT.run;
+  b.textContent=(r&&r.ph==='draft')?('Gauntlet · Resume R'+r.rung)
+    :(GAUNT.best?('Gauntlet · Best R'+GAUNT.best):'Gauntlet');
+}
 function endGame(win,title,sub){
   if(S.over) return; S.over=true;
   const P=S.teams[S.humans[0]||0];
@@ -1128,11 +1411,13 @@ function endGame(win,title,sub){
   if(S.mode!=='versus')drawEmblem(eg,prof().emb,40,40,30,PALETTE[P.col].main);
   $('endTitle').textContent=title; $('endTitle').className='bigend '+(win?'win':'lose');
   $('endSub').textContent=sub||'';
-  $('endStats').innerHTML='TIME '+fmtT(S.time)+' &nbsp;·&nbsp; KILLS '+P.kills+
+  $('endStats').innerHTML=(S.mode==='endless'&&S.ev?'WAVE '+S.ev.wave+' &nbsp;·&nbsp; ':'')+
+    'TIME '+fmtT(S.time)+' &nbsp;·&nbsp; KILLS '+P.kills+
     ' &nbsp;·&nbsp; LOSSES '+P.losses+'<br>MINERALS MINED '+Math.round(P.mined);
   const next=win&&S.mission>=0&&S.mission<MISSIONS.length-1;
   if(win&&S.mission>=0&&S.mission+1>unlocked){unlocked=S.mission+1;saveState();}
   $('endNext').classList.toggle('hidden',!next);
+  $('btnEndRetry').classList.toggle('hidden',S.mode==='gauntlet'); // no run retries
   if(win)AudioSys.win(); else AudioSys.lose();
   setTimeout(()=>UI.show('scrEnd'),650);
 }
@@ -1156,6 +1441,7 @@ function update(dt){
   for(const T of S.teams) if(T.stimT>0) T.stimT=Math.max(0,T.stimT-dt);
   moveKeyCp(dt);
   statsPass();
+  waveDirector(dt);
   for(const T of S.teams) if(T.ai&&T.alive) aiThink(T,dt);
   updateUnits(dt);
   updateZones(dt);
@@ -1254,6 +1540,20 @@ function render(){
   ctx.translate(vOx,vOy); ctx.scale(vScale,vScale);
   if(bg) ctx.drawImage(bg,0,0);
   for(const Z of S.zones) drawZone(ctx,Z,t);
+  if(S.ev&&S.ev.state==='lull'&&!S.over){ // telegraph the next wave's edge
+    const C=PALETTE[S.teams[S.horde].col], d=S.ev.dir, gz=64;
+    const a=(.10+.07*Math.sin(t*5)).toFixed(3);
+    const gr=d===0?ctx.createLinearGradient(0,0,gz,0)
+      :d===2?ctx.createLinearGradient(S.mapW,0,S.mapW-gz,0)
+      :d===1?ctx.createLinearGradient(0,0,0,gz)
+      :ctx.createLinearGradient(0,S.mapH,0,S.mapH-gz);
+    gr.addColorStop(0,'rgba('+C.rgb+','+a+')'); gr.addColorStop(1,'rgba('+C.rgb+',0)');
+    ctx.fillStyle=gr;
+    if(d===0)ctx.fillRect(0,0,gz,S.mapH);
+    else if(d===2)ctx.fillRect(S.mapW-gz,0,gz,S.mapH);
+    else if(d===1)ctx.fillRect(0,0,S.mapW,gz);
+    else ctx.fillRect(0,S.mapH-gz,S.mapW,gz);
+  }
   // corpses under units
   for(const p of S.parts) if(p.t===4){
     const a=1-p.life/p.max;
@@ -1442,6 +1742,10 @@ function refreshHUD(force){
   let o=OBJTXT(S.obj);
   if(S.def&&S.def.time) o+=' · '+fmtT(S.timeLeft);
   if(S.mode==='versus') o='LAST FORCE STANDING';
+  if(S.mode==='gauntlet') o='RUNG '+S.def.rung+'/'+GAUNT_LEN+' — '+o;
+  if(S.ev) o=S.ev.state==='lull'
+    ?('WAVE '+(S.ev.wave+1)+' IN '+fmtT(S.ev.t)+' — '+EV_CFG.dirs[S.ev.dir])
+    :('WAVE '+S.ev.wave+' — HOLD THE LINE');
   $('objVal').textContent=o;
   const heads={};
   for(const tb of trayBtns){
@@ -1541,7 +1845,7 @@ function moveKeyCp(dt){
 }
 
 /* ---------- UI / screens ---------- */
-const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrProfiles','scrProfEdit'];
+const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrProfiles','scrProfEdit','scrDraft'];
 let briefIdx=0, rulesFrom='scrSkirmish';
 const UI={
   show(id){for(const s of SCREENS)$(s).classList.toggle('hidden',s!==id);},
@@ -1562,15 +1866,29 @@ const UI={
   launchMission(){AudioSys.click();this.hideAll();newGame(buildMissionDef(briefIdx));},
   startSkirmish(){AudioSys.click();this.hideAll();
     newGame(buildSkirmishDef(SK.foes,SK.diff,SK.map,false));},
+  startEndless(){AudioSys.init();AudioSys.click();this.hideAll();newGame(buildEndlessDef());},
+  startGauntlet(){AudioSys.init();AudioSys.click();
+    let r=GAUNT.run;
+    if(r&&r.ph==='in'){ // a battle was abandoned mid-fight: that run is lost
+      gauntEndRun(); r=null;
+      toast('PREVIOUS RUN LOST — BATTLE ABANDONED','#ff6a5e');
+    }
+    if(!r){GAUNT.run=r={rung:1,perks:[],seed:(Math.random()*0x7fffffff)|0,ph:'in'};}
+    if(r.ph==='draft') showDraft(); else gauntStartBattle();},
   startVersus(){AudioSys.click();this.hideAll();newGame(buildVersusDef(VS.bots));},
   pause(){if(S.demo||S.over)return;AudioSys.click();S.paused=true;
     $('btnSoundP').textContent='Sound: '+(soundOn?'On':'Off');
     $('btnDebugP').textContent='Debug: '+(DBG?'On':'Off');
+    $('btnRestartP').classList.toggle('hidden',S.mode==='gauntlet'); // no rung retries
     this.show('scrPause');},
   resume(){AudioSys.click();S.paused=false;this.hideAll();},
   restart(){AudioSys.click();this.hideAll();newGame(S.def);},
   nextMission(){AudioSys.click();this.hideAll();newGame(buildMissionDef(S.mission+1));},
-  quit(){AudioSys.click();startMenu();},
+  quit(){AudioSys.click();
+    if(S.mode==='gauntlet'&&!S.over&&GAUNT.run){ // abandoning a battle = losing it
+      gauntEndRun(); toast('RUN FORFEITED','#ff6a5e');
+    }
+    startMenu();},
   toggleSound(){soundOn=!soundOn;AudioSys.on=soundOn;
     $('btnSound').textContent=soundOn?'♪':'✕';
     $('btnSoundP').textContent='Sound: '+(soundOn?'On':'Off');
@@ -1618,6 +1936,9 @@ const UI={
           ' · '+(S.grid?'CELLS ':'PADS ')+pads+'/'+S.zones.length+'<br>';
         for(const u of UPGDEF)
           h+=u.name.padEnd(10,'\u00a0')+' Lv'+T.up[u.k]+'/'+u.max+' → '+upgVal(T,u.k)+'<br>';
+        if(S.mode==='gauntlet'&&S.def.perks&&S.def.perks.length)
+          h+='PERKS: '+S.def.perks.map(id=>{const pd=PERKDEF.find(o=>o.id===id);
+            return pd?pd.name:id;}).join(', ')+'<br>';
         h+='KILLS '+T.kills+' · LOSSES '+T.losses+' · MINED '+Math.round(T.mined)+
           ' · TIME '+fmtT(S.time)+'<br><br>';
       }
@@ -1639,7 +1960,13 @@ function buildCampaign(){
 }
 /* ---------- profiles UI ---------- */
 let profEditIdx=-1, profDraft=null, profDelArm=false;
+function syncEndlessBtn(){
+  const b=$('btnEndless'); if(!b) return;
+  const eb=prof().endlessBest||0;
+  b.textContent=eb?('Endless · Best W'+eb):'Endless';
+}
 function syncProfChip(){
+  syncEndlessBtn(); syncGauntBtn();
   const p=prof(), c=$('profChipEmb');
   const g=c.getContext&&c.getContext('2d'); if(!g)return;
   g.clearRect(0,0,36,36);
@@ -1798,7 +2125,10 @@ requestAnimationFrame(t=>{last=t;requestAnimationFrame(frame);});
 window.__ms={S,CFG,STAT,UPGDEF,MISSIONS,RULES,RULE_DEFAULT,newGame,update,buyUpg,
   buyStim,doStim,stimAct,
   PROFILES,prof,mkProfile,switchProfile,applyProfile,stashProfile,validProfile,
-  buildMissionDef,buildSkirmishDef,buildVersusDef,spawnUnit,saveState,loadState,AudioSys};
+  buildMissionDef,buildSkirmishDef,buildVersusDef,buildEndlessDef,EV_CFG,waveSize,
+  buildGauntletDef,gauntOffers,GAUNT,GAUNT_LEN,GAUNT_RUNGS,PERKDEF,applyPerks,
+  gauntStartBattle,gauntEndRun,showDraft,sRng,UI,
+  spawnUnit,saveState,loadState,AudioSys};
 </script>
 </body>
 </html>

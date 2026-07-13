@@ -29,6 +29,42 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   cells/walls. `S.grid` holds `{gw,gh,cw,ch}`; `statsPass` uses O(1)
   cell indexing instead of the per-zone distance loop. Language + why:
   CONTEXT.md (Pad/Cell/Grid) and `docs/adr/0001-grid-reuses-pad-pipeline.md`.
+- **Endless** — survival mode (see `docs/adr/0002-horde-reuses-team-pipeline.md`
+  and CONTEXT.md: Endless/Horde/Wave/Lull/Denial capture/Best wave). One
+  dedicated map (`buildEndlessDef`: big home pad center + 6-pad ring), always
+  `RULE_DEFAULT`, zero config. The **Horde** is team index 1 (`T.horde`,
+  `S.horde`), a normal team with no home pad/units at start; a **wave
+  director** (`S.ev` `{wave,state,t,dir,maxT}`, driven by `waveDirector` in
+  `update`, tunables in `EV_CFG`) spawns discrete waves from one telegraphed
+  edge (`spawnWave`, size = `waveSize(n)`, +1 combat upgrade level per wave
+  via `hordeUpg` cycling `EV_CFG.hordeUps`). Denial capture: Horde-owned
+  pads never mine or deploy (guards in `updateZones`); Horde exempt from
+  elimination in `checkEnd`; no Horde stim. Lull is clear-triggered with a
+  `waveMax` straggler guard. Lose = player elimination; score = wave
+  reached, persisted per profile as `endlessBest` (menu button label via
+  `syncEndlessBtn`). Waves silently shrink at `rules.cap` — by design.
+- **Gauntlet** — roguelike run mode (see `docs/adr/0003-gauntlet-reuses-
+  skirmish-pipeline.md` and CONTEXT.md: Gauntlet/Run/Rung/Perk/Draft/Finale).
+  A **Run** = `GAUNT_LEN` (8) battles: rungs 1–7 are ordinary skirmish defs
+  picked from the `GAUNT_RUNGS` budget table (foes/diff/map choices), rung 8
+  (**Finale**) reuses the RECLAMATION-style grid `foesOwn` setup. Fully
+  deterministic from one seed: `SRND` (scoped override inside `rnd()`) is set
+  by `buildGauntletDef` during def building only; draft offers come from
+  `gauntOffers` (seed+rung+owned uniques). After each win, a **Draft**
+  (`scrDraft`): pick 1 of 3 **Perks** (`PERKDEF`, 9 stackable stat perks +
+  5 unique rule-benders) applied to the player team only via `T.pk`
+  modifiers (`mkPk`/`applyPerks`) — every team gets a neutral `pk`, and
+  `STAT`, income, kill bounty, capture rate, absorb, and stim cost all read
+  it. Always `RULE_DEFAULT`, zero config, solo only. Permadeath: any loss
+  ends the run, **abandoning a battle = losing it** (pause-quit forfeits;
+  Restart/Retry buttons hidden; a run saved with `ph:'in'` is declared lost
+  on next Gauntlet start — the only resume point is `ph:'draft'`). Working
+  state `GAUNT{run,wins,best}`, persisted per profile (`gaunt`/`gauntWins`/
+  `gauntBest`, validated + unique-perk-deduped in `validProfile`); menu
+  button label via `syncGauntBtn`. Note for sims: the AI-vs-AI grid-finale
+  seesaw applies here too, and a hard-AI proxy only wins ~65% of rung 1 —
+  that's baseline AI-vs-AI variance (measured identical on plain skirmish),
+  not a Gauntlet bug; humans do much better.
 - **Versus** — local 2-player same-screen (P1 = left screen half / WASD,
   P2 = right half / arrow keys), optional 2 neutral bots.
 - Menu background is a live "demo" skirmish sim (`S.demo`), muted/no HUD.

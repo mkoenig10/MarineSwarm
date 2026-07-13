@@ -81,6 +81,50 @@ _Avoid_: zone, beacon (zone survives only in code identifiers and the game's sub
 One square of grid territory on a Grid battlefield. Behaves as a scaled-down pad — mines and reinforces for its owner, painted in the owner's color. Uniform: no big cells.
 _Avoid_: zone, sector, tile
 
+**Endless**:
+The survival mode: one player defends against escalating Waves of the Horde on a single dedicated map, under standard rules, until their army is wiped. A run lasts one sitting; the score is the wave number reached, and each profile keeps its best.
+_Avoid_: survival, horde mode (Horde names the enemy, not the mode)
+
+**Horde**:
+The enemy force in Endless. Not a rival player: it has no economy and gains nothing from ground it takes — it exists only as Waves, growing in numbers and combat strength as the run goes on. Its marines can still defect to the player (and absorb strays) like any other team's.
+_Avoid_: wave team, foe (foes are the symmetric AIs of Campaign/Skirmish)
+
+**Wave**:
+One discrete Horde assault: a group of marines arriving together from a single battlefield edge, announced during the preceding Lull with its direction. Each wave is bigger and stronger than the last. A wave ends when its marines are dead or defected — or, past a time limit, its stragglers are folded into the next wave.
+
+**Lull**:
+The guaranteed breathing period between waves — the window to retake pads, mine, and buy upgrades before the next assault is announced.
+_Avoid_: intermission, downtime
+
+**Denial capture**:
+What happens when the Horde takes a pad: the pad stops working for the player but never works for the Horde — no mining, no reinforcement. Taking ground in Endless only ever starves the defender.
+
+**Best wave**:
+A profile's Endless record: the highest wave number that profile has reached.
+_Avoid_: high score
+
+**Gauntlet**:
+The roguelike mode: a fixed ladder of procedurally generated battles climbed one Run at a time. Winning the Finale wins the run; any loss — or abandoning a battle in progress — ends it.
+_Avoid_: run mode, roguelike mode
+
+**Run**:
+One attempt at the Gauntlet, from rung 1 to victory or death. Resumable between battles; each profile keeps its record (runs won, deepest rung).
+
+**Rung**:
+One battle's slot on the Gauntlet ladder. Each rung's difficulty budget buys the battle's foes, map, and modifiers — higher rungs, richer budgets.
+_Avoid_: level, stage, floor
+
+**Perk**:
+A drafted, run-long modifier — the Gauntlet build. Distinct from an upgrade (permanent stat bought per battle) and an ability (activated per use, priced). Stat perks stack if drafted again; rule-bending perks are unique per run.
+_Avoid_: relic, boon, trait
+
+**Draft**:
+The post-victory choice between three offered perks; pick one, then climb to the next rung.
+
+**Finale**:
+The Gauntlet's last rung. Winning it wins the run.
+_Avoid_: boss (nothing is a single boss unit)
+
 **Grid**:
 A battlefield fully tiled with cells instead of dotted with pads — a Skirmish map type and the board of select campaign missions. Territory painting replaces discrete beacon capture; a match still ends by elimination.
 _Avoid_: zone control (the inspiration, not the feature name)
