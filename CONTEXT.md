@@ -37,6 +37,17 @@ _Avoid_: shortcut, keybind
 **Supply-capped**:
 The state where a team's unit count has reached its supply value, halting reinforcements. Surfaced in the topbar by color (amber near cap, red at cap).
 
+**Play band**:
+The viewport strip between the topbar and the tray. The battlefield fills exactly this band, so no pad, cell, or marine is ever hidden under (or untappable through) HUD chrome. The menu's background battle ignores it (no HUD), and Versus insets only the top (its side trays overlay the flanks).
+_Avoid_: safe area (that's the device notch inset), viewport (the band is smaller)
+
+**Rotate gate**:
+The full-screen "rotate to landscape" cover shown on phone-sized screens in portrait. The game is landscape-only on phones; tablets and desktops are never gated.
+_Avoid_: orientation lock (nothing is locked — the player rotates)
+
+**Side panel**:
+An infographic column beside a screen's central button column — the pause screen's Field Stats and the end screen's battle stats and run debrief — so reading material never adds rows to (or pushes off) the buttons.
+
 ### Game
 
 **Profile**:
