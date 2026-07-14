@@ -253,6 +253,10 @@ counts, combat/income actually happened, no units embedded in walls).
 
 ## File map
 - `/mnt/user-data/outputs/marine-swarm.html` — the game, ship this file.
+- `ios/` — WKWebView shell for pushing the game to an iPhone/iPad from Xcode
+  (play-testing only; see `ios/README.md`). It bundles the repo's
+  `marine-swarm.html` by reference — the game stays single-file and
+  server-free; the shell is not part of the shipped product.
 - This `CLAUDE.md` — handoff doc only, not referenced by the game itself.
 
 ## Agent skills
