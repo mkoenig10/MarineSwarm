@@ -168,6 +168,17 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   chip, profile rows, end screen (non-versus), P1's versus side tray,
   and in-world on P1's command beacon + home pad (`Z.homeOf`, drawn
   while the home zone is still owned).
+- **Play band / mobile layout** (see CONTEXT.md: Play band/Rotate gate/Side
+  panel and `docs/adr/0005-world-fills-the-play-band.md`) — `fitView`/`mapDims`
+  fit the world to the strip between topbar and tray (`S.band`, measured via
+  `hudBand(mode)`; demo = zero band, versus = top only), so nothing sits under
+  HUD chrome. The game is landscape-only on phones (`#rotGate`, pure CSS,
+  portrait + ≤600px wide). Menus: `.screen` scrolls with hidden bars and
+  auto-margin pseudo centering (no top clipping); a `max-height:520px`
+  landscape media query compacts must-fit screens (menu/pause 2-col button
+  grids, `.split` side-by-side, `.spanel` side infographic panels for pause
+  Field Stats + end-screen stats/debrief). Main menu = 5 mode buttons; Armory
+  lives on the profile row (`#armChip`), help behind a `?` corner button.
 - **Input** — pointer events drive a per-team "command point" (`T.cp`);
   units steer toward it (`updateUnits`). Versus splits pointer by screen
   half. WASD / arrow keys also nudge `T.cp` (`moveKeyCp`).

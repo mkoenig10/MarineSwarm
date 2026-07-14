@@ -69,8 +69,13 @@
     color:#ffb0b0;font:11px ui-monospace,monospace;padding:6px 8px;z-index:99;pointer-events:auto}
 
   /* ---------- SCREENS ---------- */
-  .screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:14px;background:rgba(7,10,16,.82);padding:24px 18px calc(24px + env(safe-area-inset-bottom));text-align:center;overflow-y:auto}
+  /* flex-start + auto-margin pseudos = centered when content fits, but the top
+     stays reachable when it overflows (justify-content:center clips both ends) */
+  .screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    gap:14px;background:rgba(7,10,16,.82);padding:24px 18px calc(24px + env(safe-area-inset-bottom));text-align:center;
+    overflow-y:auto;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+  .screen::before,.screen::after{content:'';margin:auto}
   .eyebrow{font-size:11px;letter-spacing:.42em;color:#7f8ba3;text-transform:uppercase}
   h1.logo{font-size:min(13vw,64px);letter-spacing:.1em;color:#fff;line-height:.95;font-weight:800}
   h1.logo span{color:#ffb454}
@@ -104,8 +109,15 @@
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
   #upgTip b,#ruleTip b{color:#ffb454;letter-spacing:.12em}
   #upgTip .vals,#ruleTip .vals{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#9fb0cc}
-  #statsBox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.75;
-    background:#101724;border:1px solid #2b3a55;padding:10px 16px;max-width:min(92vw,420px);text-align:left}
+  /* side infographic panels (pause Field Stats / end-screen stats & debrief) */
+  .pwrap{display:flex;gap:22px;align-items:center;justify-content:center;max-width:96vw}
+  .pcol{display:flex;flex-direction:column;gap:12px;align-items:center}
+  #pGrid{display:flex;flex-direction:column;gap:10px;align-items:center}
+  .spanel{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.7;
+    background:#101724;border:1px solid #2b3a55;padding:10px 14px;text-align:left;
+    max-width:min(44vw,360px);max-height:min(72vh,440px);overflow-y:auto;scrollbar-width:none;
+    -webkit-user-select:text;user-select:text}
+  .spanel::-webkit-scrollbar{display:none}
   h2.sh{font-size:20px;letter-spacing:.3em;color:#fff;text-transform:uppercase}
   .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center}
   .lbl{font-size:11px;letter-spacing:.28em;color:#7f8ba3;text-transform:uppercase;min-width:100%}
@@ -126,16 +138,17 @@
   .helptxt b{color:#ffb454;letter-spacing:.06em}
   .bigend{font-size:min(11vw,52px);font-weight:800;letter-spacing:.14em}
   .bigend.win{color:#7ee08c}.bigend.lose{color:#ff6a5e}
-  #endStats{font-family:ui-monospace,monospace;font-size:13px;color:#9fb0cc;line-height:1.8;
-    -webkit-user-select:text;user-select:text}
+  #endStats,#endDeb{color:#9fb0cc}
   .keycap{display:inline-block;border:1px solid #3a4c72;padding:0 6px;font-family:ui-monospace,monospace;font-size:11px;background:#0e1420}
   /* profiles */
   .mbtn:disabled{opacity:.4;cursor:default}
-  #profChip{display:inline-flex;align-items:center;gap:8px;background:#101724;border:1px solid #2b3a55;
+  #profChip,#armChip{display:inline-flex;align-items:center;gap:8px;background:#101724;border:1px solid #2b3a55;
     color:#9fb0cc;padding:8px 18px;font-size:12px;letter-spacing:.18em;cursor:pointer;text-transform:uppercase;
     clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
-  #profChip:active{background:#1d2a40}
-  #profList{display:flex;flex-direction:column;gap:8px;width:min(92vw,420px)}
+  #profChip:active,#armChip:active{background:#1d2a40}
+  #profList{display:flex;flex-direction:column;gap:8px;width:min(92vw,420px);
+    max-height:52vh;overflow-y:auto;scrollbar-width:none}
+  #profList::-webkit-scrollbar{display:none}
   .prow{display:flex;align-items:center;gap:12px;background:#101724;border:1px solid #2b3a55;
     padding:8px 14px;cursor:pointer;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
@@ -160,10 +173,51 @@
   #draftList{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;width:min(92vw,640px)}
   #draftList .card .s{color:#aebad2;line-height:1.45}
   #draftList .card:active{background:#1d2a40}
+  /* split layouts: column on tall screens, side-by-side on short landscape */
+  .split{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:96vw}
+  .split .sA,.split .sB{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .corner{position:absolute;top:calc(12px + env(safe-area-inset-top));
+    right:calc(14px + env(safe-area-inset-right));z-index:2}
+  /* rotate gate: the game is landscape-only on phones (iPads never gated) */
+  #rotGate{display:none}
+  @media (orientation:portrait) and (max-width:600px){
+    #rotGate{display:flex;position:fixed;inset:0;z-index:100;background:#07090f;
+      flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  }
+  #rotGate .rg1{font-size:46px;color:#ffb454}
+  #rotGate .rg2{font-size:12px;letter-spacing:.32em;color:#8fa1c0}
+  /* short landscape (phones): compact + side-by-side so every must-fit
+     screen fits ~844x390 minus safe areas with zero scrolling */
+  @media (orientation:landscape) and (max-height:520px){
+    .screen{gap:10px;padding:14px 16px calc(14px + env(safe-area-inset-bottom))}
+    .split{flex-direction:row;gap:34px}
+    .split .sA,.split .sB{gap:8px}
+    h1.logo{font-size:min(9vh,44px)}
+    h2.sh{font-size:16px;letter-spacing:.24em}
+    .bigend{font-size:min(9vh,40px)}
+    .mbtn{padding:11px 10px;font-size:14px}
+    #menuBtns{display:grid;grid-template-columns:repeat(2,minmax(140px,172px));gap:8px}
+    #menuBtns .mbtn{width:100%;padding:11px 6px;font-size:12.5px;letter-spacing:.13em}
+    #menuBtns .mbtn:last-child{grid-column:1/-1}
+    #pGrid{display:grid;grid-template-columns:repeat(2,156px);gap:8px}
+    #pGrid .mbtn{width:100%;padding:10px 6px;font-size:12px;letter-spacing:.13em}
+    .row .lbl{min-width:0}
+    .seg{padding:7px 10px;font-size:12px}
+    .helptxt{font-size:11.5px;line-height:1.5;max-width:min(44vw,360px)}
+    .brieftxt{font-size:12.5px;line-height:1.45}
+    .foot{margin-top:0}
+    .spanel{max-height:76vh}
+    /* slimmer tray = taller play band (hudBand measures it live) */
+    #tray{padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));gap:5px}
+    .ub{min-width:76px;padding:5px 5px 4px;gap:2px}
+    .ub b{font-size:10.5px}
+    .ub em{font-size:11px}
+  }
 </style>
 </head>
 <body>
 <canvas id="cv"></canvas>
+<div id="rotGate"><div class="rg1">⟳</div><div class="rg2">ROTATE TO LANDSCAPE</div></div>
 
 <!-- HUD -->
 <div id="hud" class="hidden">
@@ -185,18 +239,25 @@
 
 <!-- MENU -->
 <div id="scrMenu" class="screen">
-  <div class="eyebrow">Tactical Swarm Command</div>
-  <h1 class="logo">MARINE<br><span>SWARM</span></h1>
-  <div class="sub">Zone Command</div>
-  <button id="profChip" onclick="UI.profiles()"><canvas id="profChipEmb" width="36" height="36" style="width:18px;height:18px"></canvas><span id="profChipName">—</span></button>
-  <div style="height:6px"></div>
-  <button class="mbtn hot" onclick="UI.go('scrCampaign')">Campaign</button>
-  <button class="mbtn" onclick="UI.go('scrSkirmish')">Skirmish</button>
-  <button class="mbtn" id="btnEndless" onclick="UI.startEndless()">Endless</button>
-  <button class="mbtn" id="btnGaunt" onclick="UI.startGauntlet()">Gauntlet</button>
-  <button class="mbtn" onclick="UI.go('scrVersus')">Versus · 2P</button>
-  <button class="mbtn" onclick="UI.armory('scrMenu')">Armory</button>
-  <button class="mbtn" onclick="UI.go('scrHelp')">How to Play</button>
+  <button class="tbtn corner" onclick="UI.go('scrHelp')" title="How to Play">?</button>
+  <div class="split">
+    <div class="sA">
+      <div class="eyebrow">Tactical Swarm Command</div>
+      <h1 class="logo">MARINE<br><span>SWARM</span></h1>
+      <div class="sub">Zone Command</div>
+      <div class="row">
+        <button id="profChip" onclick="UI.profiles()"><canvas id="profChipEmb" width="36" height="36" style="width:18px;height:18px"></canvas><span id="profChipName">—</span></button>
+        <button id="armChip" onclick="UI.armory('scrMenu')">Armory</button>
+      </div>
+    </div>
+    <div class="sB" id="menuBtns">
+      <button class="mbtn hot" onclick="UI.go('scrCampaign')">Campaign</button>
+      <button class="mbtn" onclick="UI.go('scrSkirmish')">Skirmish</button>
+      <button class="mbtn" id="btnEndless" onclick="UI.startEndless()">Endless</button>
+      <button class="mbtn" id="btnGaunt" onclick="UI.startGauntlet()">Gauntlet</button>
+      <button class="mbtn" onclick="UI.go('scrVersus')">Versus · 2P</button>
+    </div>
+  </div>
   <div class="foot">HOLD &amp; DRAG TO COMMAND · SINGLE-FILE HTML5</div>
 </div>
 
@@ -219,28 +280,44 @@
 
 <!-- SKIRMISH -->
 <div id="scrSkirmish" class="screen hidden">
-  <h2 class="sh">Skirmish</h2>
-  <div class="row"><div class="lbl">Enemy commanders</div><div class="row" id="skFoes"></div></div>
-  <div class="row"><div class="lbl">Difficulty</div><div class="row" id="skDiff"></div></div>
-  <div class="row"><div class="lbl">Battlefield</div><div class="row" id="skMap"></div></div>
-  <div style="height:6px"></div>
-  <button class="mbtn hot" onclick="UI.startSkirmish()">Deploy</button>
-  <button class="mbtn small" onclick="UI.rules('scrSkirmish')">Battle Rules</button>
-  <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
+  <div class="split">
+    <div class="sA">
+      <h2 class="sh">Skirmish</h2>
+      <div class="eyebrow">Custom battle — rules apply</div>
+    </div>
+    <div class="sB">
+      <div class="row"><div class="lbl">Enemy commanders</div><div class="row" id="skFoes"></div></div>
+      <div class="row"><div class="lbl">Difficulty</div><div class="row" id="skDiff"></div></div>
+      <div class="row"><div class="lbl">Battlefield</div><div class="row" id="skMap"></div></div>
+      <div class="row">
+        <button class="mbtn hot" style="width:auto;min-width:170px" onclick="UI.startSkirmish()">Deploy</button>
+        <button class="mbtn small" onclick="UI.rules('scrSkirmish')">Battle Rules</button>
+        <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- VERSUS -->
 <div id="scrVersus" class="screen hidden">
-  <h2 class="sh">Versus · Local 2P</h2>
-  <div class="helptxt" style="text-align:center">
-    <b>P1</b> — touch the LEFT half, or mouse / <span class="keycap">WASD</span> · upgrades <span class="keycap">1</span>–<span class="keycap">4</span> · stim <span class="keycap">SPACE</span><br>
-    <b>P2</b> — touch the RIGHT half, or <span class="keycap">← ↑ ↓ →</span> · upgrades <span class="keycap">7</span>–<span class="keycap">0</span> · stim <span class="keycap">ENTER</span><br>
-    <span style="color:#7f8ba3">Same screen. Two fingers. First force standing wins.</span>
+  <div class="split">
+    <div class="sA">
+      <h2 class="sh">Versus · Local 2P</h2>
+      <div class="helptxt" style="text-align:center">
+        <b>P1</b> — touch the LEFT half, or mouse / <span class="keycap">WASD</span> · upgrades <span class="keycap">1</span>–<span class="keycap">4</span> · stim <span class="keycap">SPACE</span><br>
+        <b>P2</b> — touch the RIGHT half, or <span class="keycap">← ↑ ↓ →</span> · upgrades <span class="keycap">7</span>–<span class="keycap">0</span> · stim <span class="keycap">ENTER</span><br>
+        <span style="color:#7f8ba3">Same screen. Two fingers. First force standing wins.</span>
+      </div>
+    </div>
+    <div class="sB">
+      <div class="row"><div class="lbl">Neutral bots</div><div class="row" id="vsBots"></div></div>
+      <div class="row">
+        <button class="mbtn hot" style="width:auto;min-width:170px" onclick="UI.startVersus()">Start Match</button>
+        <button class="mbtn small" onclick="UI.rules('scrVersus')">Battle Rules</button>
+        <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
+      </div>
+    </div>
   </div>
-  <div class="row"><div class="lbl">Neutral bots</div><div class="row" id="vsBots"></div></div>
-  <button class="mbtn hot" onclick="UI.startVersus()">Start Match</button>
-  <button class="mbtn small" onclick="UI.rules('scrVersus')">Battle Rules</button>
-  <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
 </div>
 
 <!-- BATTLE RULES -->
@@ -319,26 +396,37 @@
 
 <!-- PAUSE -->
 <div id="scrPause" class="screen hidden">
-  <h2 class="sh">Paused</h2>
-  <button class="mbtn hot" onclick="UI.resume()">Resume</button>
-  <button class="mbtn" id="btnRestartP" onclick="UI.restart()">Restart</button>
-  <button class="mbtn" id="btnSoundP" onclick="UI.toggleSound()">Sound: On</button>
-  <button class="mbtn" id="btnDebugP" onclick="UI.toggleDebug()">Debug: Off</button>
-  <button class="mbtn" onclick="UI.stats()">Field Stats</button>
-  <div id="statsBox" class="hidden"></div>
-  <button class="mbtn" onclick="UI.quit()">Quit to Menu</button>
+  <div class="pwrap">
+    <div class="pcol">
+      <h2 class="sh">Paused</h2>
+      <div id="pGrid">
+        <button class="mbtn hot" onclick="UI.resume()">Resume</button>
+        <button class="mbtn" id="btnRestartP" onclick="UI.restart()">Restart</button>
+        <button class="mbtn" id="btnSoundP" onclick="UI.toggleSound()">Sound: On</button>
+        <button class="mbtn" id="btnDebugP" onclick="UI.toggleDebug()">Debug: Off</button>
+        <button class="mbtn" onclick="UI.stats()">Field Stats</button>
+        <button class="mbtn" onclick="UI.quit()">Quit to Menu</button>
+      </div>
+    </div>
+    <div id="statsBox" class="spanel hidden"></div>
+  </div>
 </div>
 
 <!-- END -->
 <div id="scrEnd" class="screen hidden">
-  <canvas id="endEmb" width="80" height="80" style="width:40px;height:40px"></canvas>
-  <div class="bigend" id="endTitle">VICTORY</div>
-  <div class="eyebrow" id="endSub"></div>
-  <div id="endStats"></div>
-  <button class="mbtn small hidden" id="btnCopyDeb" onclick="UI.copyDebrief()">Copy Debrief</button>
-  <button class="mbtn hot hidden" id="endNext" onclick="UI.nextMission()">Next Mission</button>
-  <button class="mbtn" id="btnEndRetry" onclick="UI.restart()">Retry</button>
-  <button class="mbtn small" onclick="UI.quit()">Menu</button>
+  <div class="pwrap">
+    <div id="endStats" class="spanel"></div>
+    <div class="pcol">
+      <canvas id="endEmb" width="80" height="80" style="width:40px;height:40px"></canvas>
+      <div class="bigend" id="endTitle">VICTORY</div>
+      <div class="eyebrow" id="endSub"></div>
+      <button class="mbtn small hidden" id="btnCopyDeb" onclick="UI.copyDebrief()">Copy Debrief</button>
+      <button class="mbtn hot hidden" id="endNext" onclick="UI.nextMission()">Next Mission</button>
+      <button class="mbtn" id="btnEndRetry" onclick="UI.restart()">Retry</button>
+      <button class="mbtn small" onclick="UI.quit()">Menu</button>
+    </div>
+    <div id="endDeb" class="spanel hidden"></div>
+  </div>
 </div>
 
 <script>
@@ -963,8 +1051,34 @@ const MISSIONS=[
 const OBJTXT=o=>o.t==='elim'?'ELIMINATE ALL HOSTILES':(o.t==='survive'?'SURVIVE':
   (o.t==='endless'?'SURVIVE THE WAVES':'CAPTURE ALL PADS'));
 
-function mapDims(){const cw=window.innerWidth||900, ch=window.innerHeight||600;
-  S.mapH=1000; S.mapW=clamp(Math.round(1000*cw/Math.max(1,ch)),640,1900);}
+/* play band: the viewport strip between the topbar and the upgrade tray
+   (ADR 0005). The world fills exactly this band so nothing renders or needs
+   tapping under HUD chrome. Demo (menu background) has no HUD; versus hides
+   #tray (side trays overlay the flanks and don't inset). If the tray is
+   empty at measure time (def built from a menu), a throwaway upgrade button
+   stands in for the real ones. */
+function hudBand(mode){
+  if(mode==='demo') return {top:0,bot:0};
+  let top=46, bot=mode==='versus'?0:84; // headless / measurement-failure estimates
+  try{
+    const hud=$('hud'), tray=$('tray');
+    const unhide=hud.classList.contains('hidden');
+    if(unhide) hud.classList.remove('hidden');
+    let dummy=null;
+    if(mode!=='versus'&&!tray.children.length){dummy=mkUb({name:'SUPPLY'},'0');tray.appendChild(dummy);}
+    const t=$('topbar').offsetHeight, b=mode==='versus'?0:tray.offsetHeight;
+    if(dummy) dummy.remove();
+    if(unhide) hud.classList.add('hidden');
+    if(Number.isFinite(t)&&t>0&&t<200) top=t;
+    if(Number.isFinite(b)&&b>=0&&b<260) bot=b;
+  }catch(e){}
+  return {top,bot};
+}
+const bandMode=()=>S.demo?'demo':(S.mode==='versus'?'versus':'');
+function mapDims(mode){const cw=window.innerWidth||900, ch=window.innerHeight||600;
+  S.band=hudBand(mode);
+  const bh=Math.max(200,ch-S.band.top-S.band.bot);
+  S.mapH=1000; S.mapW=clamp(Math.round(1000*cw/Math.max(1,bh)),640,1900);}
 function farApart(list,x,y,min){return list.every(z=>{const dx=z.x-x,dy=z.y-y;return dx*dx+dy*dy>min*min})}
 
 /* team colors: the human takes the profile color; scripted/default colors
@@ -1013,7 +1127,7 @@ function buildGridMissionDef(i,m){
     title:m.t,grid:{gw,gh},rules:{...RULE_DEFAULT}};
 }
 function buildSkirmishDef(foes,diff,map,demo){
-  mapDims(); const k=foes+1, zones=[], walls=[], teams=[];
+  mapDims(demo?'demo':''); const k=foes+1, zones=[], walls=[], teams=[];
   const homes=[];
   for(let i=0;i<k;i++){const a=Math.PI+i*TAU/k;
     homes.push({x:(.5+.4*Math.cos(a))*S.mapW,y:(.5+.38*Math.sin(a))*S.mapH});}
@@ -1060,7 +1174,7 @@ function buildSkirmishDef(foes,diff,map,demo){
     rules:demo?{...RULE_DEFAULT}:{...RULES}};
 }
 function buildVersusDef(bots){
-  mapDims(); const zones=[{x:.1*S.mapW,y:.5*S.mapH},{x:.9*S.mapW,y:.5*S.mapH},
+  mapDims('versus'); const zones=[{x:.1*S.mapW,y:.5*S.mapH},{x:.9*S.mapW,y:.5*S.mapH},
     {x:.5*S.mapW,y:.5*S.mapH,big:true},{x:.3*S.mapW,y:.3*S.mapH},{x:.7*S.mapW,y:.3*S.mapH},
     {x:.3*S.mapW,y:.7*S.mapH},{x:.7*S.mapW,y:.7*S.mapH}];
   const st=RULES.start, al=colAlloc();
@@ -1168,8 +1282,9 @@ function newGame(def){
   S.zcW=S.zones.map(()=>new Array(nt).fill(0));
   S.ts=S.teams.map(()=>({n:0,cx:0,cy:0}));
   GRID.init(S.mapW,S.mapH);
-  prerenderBG(); fitView(); buildTrays(); refreshHUD(true);
+  prerenderBG(); buildTrays(); refreshHUD(true);
   $('hud').classList.toggle('hidden',S.demo);
+  S.band=hudBand(bandMode()); fitView(); // exact band now the real tray exists
 }
 function spawnUnit(ti,x,y,fx){
   const T=S.teams[ti], hp=STAT.hp(T);
@@ -1590,7 +1705,7 @@ function gauntLogRung(P,win){
     lost:P.losses,low:Math.min(S.runLow,S.ts[0].n),sup:S.ts[0].n,win});
 }
 function gauntDebriefHtml(d){
-  let h='<br><span style="color:#7f8ba3">— RUN DEBRIEF —</span><br>';
+  let h='<span style="color:#7f8ba3">— RUN DEBRIEF —</span><br>';
   for(const e of d.log)
     h+='R'+e.r+' '+String(e.map).toUpperCase().padEnd(9,' ')+' '+fmtT(e.t)+
       ' · LOST '+e.lost+' · LOW '+e.low+(e.win?'':' ✝')+'<br>';
@@ -1650,10 +1765,11 @@ function endGame(win,title,sub){
   if(S.mode!=='versus')drawEmblem(eg,prof().emb,40,40,30,PALETTE[P.col].main);
   $('endTitle').textContent=title; $('endTitle').className='bigend '+(win?'win':'lose');
   $('endSub').textContent=sub||'';
-  $('endStats').innerHTML=(S.mode==='endless'&&S.ev?'WAVE '+S.ev.wave+' &nbsp;·&nbsp; ':'')+
-    'TIME '+fmtT(S.time)+' &nbsp;·&nbsp; KILLS '+P.kills+
-    ' &nbsp;·&nbsp; LOSSES '+P.losses+'<br>MINERALS MINED '+Math.round(P.mined)+
-    (S.mode==='gauntlet'&&gauntLast?gauntDebriefHtml(gauntLast):'');
+  $('endStats').innerHTML=(S.mode==='endless'&&S.ev?'WAVE '+S.ev.wave+'<br>':'')+
+    'TIME '+fmtT(S.time)+'<br>KILLS '+P.kills+
+    '<br>LOSSES '+P.losses+'<br>MINERALS MINED '+Math.round(P.mined);
+  const deb=(S.mode==='gauntlet'&&gauntLast)?gauntDebriefHtml(gauntLast):'';
+  $('endDeb').innerHTML=deb; $('endDeb').classList.toggle('hidden',!deb);
   gauntDebText=(S.mode==='gauntlet'&&gauntLast)?gauntDebriefText(gauntLast):'';
   $('btnCopyDeb').classList.toggle('hidden',!gauntDebText);
   gauntLast=null;
@@ -1703,11 +1819,13 @@ function resize(){
   DPR=Math.min(2,window.devicePixelRatio||1);
   cv.width=Math.round(VW*DPR); cv.height=Math.round(VH*DPR);
   cv.style.width=VW+'px'; cv.style.height=VH+'px';
+  if(S.mapW) S.band=hudBand(bandMode());
   fitView();
 }
 function fitView(){
-  vScale=Math.min(VW/S.mapW,VH/S.mapH);
-  vOx=(VW-S.mapW*vScale)/2; vOy=(VH-S.mapH*vScale)/2;
+  const b=S.band||{top:0,bot:0}, bh=Math.max(1,VH-b.top-b.bot);
+  vScale=Math.min(VW/S.mapW,bh/S.mapH);
+  vOx=(VW-S.mapW*vScale)/2; vOy=b.top+(bh-S.mapH*vScale)/2;
 }
 function s2w(e){return {x:(e.clientX-vOx)/vScale, y:(e.clientY-vOy)/vScale}}
 function prerenderBG(){
