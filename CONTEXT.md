@@ -51,8 +51,12 @@ An infographic column beside a screen's central button column — the pause scre
 ### Game
 
 **Profile**:
-A local, per-device player identity: name, profile color, and emblem, plus that player's campaign progress, Battle Rules, and match setup. No account, no login — profiles live in this browser's storage only. The last-used profile is auto-selected at boot; the menu chip switches it.
+A local, per-device player identity: name, profile color, and emblem, plus that player's campaign progress, Battle Rules, and match setup. No account, no login — profiles live in this browser's storage only. The last-used profile is auto-selected at boot; the menu chip switches it. Internal term only — the player-facing name for this identity and its hub screen is Commander.
 _Avoid_: account, login, user (nothing is authenticated)
+
+**Commander screen**:
+The player-facing hub consolidating a profile's identity (name, color, emblem), Armory access, and best records. "Commander" is the player-facing word for what the code and this glossary call a Profile.
+_Avoid_: profile screen (in player-facing text), account page
 
 **Profile color**:
 The palette color a profile chooses; it becomes that player's team color in every mode. A scripted foe holding the same color is remapped to the first unused palette color.

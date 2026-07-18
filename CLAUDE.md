@@ -41,8 +41,8 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   pads never mine or deploy (guards in `updateZones`); Horde exempt from
   elimination in `checkEnd`; no Horde stim. Lull is clear-triggered with a
   `waveMax` straggler guard. Lose = player elimination; score = wave
-  reached, persisted per profile as `endlessBest` (menu button label via
-  `syncEndlessBtn`). Waves silently shrink at `rules.cap` — by design.
+  reached, persisted per profile as `endlessBest` (shown on the Commander
+  screen). Waves silently shrink at `rules.cap` — by design.
 - **Gauntlet** — roguelike run mode (see `docs/adr/0003-gauntlet-reuses-
   skirmish-pipeline.md` and CONTEXT.md: Gauntlet/Run/Rung/Perk/Draft/Finale).
   A **Run** = `GAUNT_LEN` (8) battles: rungs 1–7 are ordinary skirmish defs
@@ -60,8 +60,9 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   Restart/Retry buttons hidden; a run saved with `ph:'in'` is declared lost
   on next Gauntlet start — the only resume point is `ph:'draft'`). Working
   state `GAUNT{run,wins,best}`, persisted per profile (`gaunt`/`gauntWins`/
-  `gauntBest`, validated + unique-perk-deduped in `validProfile`); menu
-  button label via `syncGauntBtn`. **Run debrief** (playtest telemetry for
+  `gauntBest`, validated + unique-perk-deduped in `validProfile`); best
+  rung + full clears shown on the Commander screen; the menu button only
+  carries a `· Resume Rn` suffix for a live run (`syncGauntBtn`). **Run debrief** (playtest telemetry for
   tuning, nothing reads it): `gauntLogRung` pushes one entry per rung fought
   onto `GAUNT.run.log` (map, clear time, losses, army low-point via
   `S.runLow`, 10s grace); shown on the end screen (`gauntDebriefHtml` via
@@ -115,8 +116,8 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   (null = stock look); def builders give it to the profile player's team
   only via `profKit()` (foes, Horde, Versus P2, menu demo stay stock).
   Persisted per profile (`kit`, validated in `validProfile`), all options
-  free from the start. The **Armory** (`scrArmory`, main-menu button +
-  linked from profile edit) edits the active profile's kit in place and
+  free from the start. The **Armory** (`scrArmory`, opened from the
+  Commander screen) edits the active profile's kit in place and
   previews it in a live viewer (`armoryFrame`: rotating, walk-cycling,
   test-firing with true muzzle offset + `AudioSys.shotSnd(w)`, which
   bypasses the per-tick shot budget).
@@ -158,7 +159,8 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   `stashProfile()` copy in/out on switch & save). Device-global: sound.
   Save format `ms_save_v2` `{profiles,active,sound}` with one-time v1
   migration (v1 removed + v2 written immediately). Boot auto-selects
-  `active`; menu chip (`#profChip`, `syncProfChip`) opens `scrProfiles`
+  `active`; menu chip (`#profChip`, `syncProfChip`) opens the Commander
+  screen (`scrCommander` — see Play band section), which links to `scrProfiles`
   (create/switch/rename/delete, cap `MAXPROF=8`, two-tap delete) and
   `scrProfEdit` (name input + 6 color swatches + 12 emblems).
   **Profile color = team color in all modes** (demo excluded): def
@@ -177,8 +179,14 @@ and per-team upgrades (damage/rof/speed/range/armor/reinforce/supply).
   auto-margin pseudo centering (no top clipping); a `max-height:520px`
   landscape media query compacts must-fit screens (menu/pause 2-col button
   grids, `.split` side-by-side, `.spanel` side infographic panels for pause
-  Field Stats + end-screen stats/debrief). Main menu = 5 mode buttons; Armory
-  lives on the profile row (`#armChip`), help behind a `?` corner button.
+  Field Stats + end-screen stats/debrief). Main menu = 5 mode buttons + one
+  chip (`#profChip`) opening the **Commander screen** (`scrCommander`,
+  `buildCommander`): the active profile's hub — big emblem + name, a
+  best-records `.spanel` (campaign missions cleared, Endless best wave,
+  Gauntlet best rung, full clears), and Armory / Edit / Switch Commander
+  buttons. "Commander" is the player-facing word for Profile (CONTEXT.md).
+  Best stats no longer appear on mode buttons. Help behind a `?` corner
+  button.
 - **Input** — pointer events drive a per-team "command point" (`T.cp`);
   units steer toward it (`updateUnits`). Versus splits pointer by screen
   half. WASD / arrow keys also nudge `T.cp` (`moveKeyCp`).
