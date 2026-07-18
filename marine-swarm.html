@@ -142,10 +142,13 @@
   .keycap{display:inline-block;border:1px solid #3a4c72;padding:0 6px;font-family:ui-monospace,monospace;font-size:11px;background:#0e1420}
   /* profiles */
   .mbtn:disabled{opacity:.4;cursor:default}
-  #profChip,#armChip{display:inline-flex;align-items:center;gap:8px;background:#101724;border:1px solid #2b3a55;
+  #profChip{display:inline-flex;align-items:center;gap:8px;background:#101724;border:1px solid #2b3a55;
     color:#9fb0cc;padding:8px 18px;font-size:12px;letter-spacing:.18em;cursor:pointer;text-transform:uppercase;
     clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
-  #profChip:active,#armChip:active{background:#1d2a40}
+  #profChip:active{background:#1d2a40}
+  #cmdEmb{width:96px;height:96px}
+  #cmdRec{min-width:min(60vw,300px)}
+  #cmdRec b{color:#ffb454;letter-spacing:.12em}
   #profList{display:flex;flex-direction:column;gap:8px;width:min(92vw,420px);
     max-height:52vh;overflow-y:auto;scrollbar-width:none}
   #profList::-webkit-scrollbar{display:none}
@@ -246,8 +249,7 @@
       <h1 class="logo">MARINE<br><span>SWARM</span></h1>
       <div class="sub">Zone Command</div>
       <div class="row">
-        <button id="profChip" onclick="UI.profiles()"><canvas id="profChipEmb" width="36" height="36" style="width:18px;height:18px"></canvas><span id="profChipName">—</span></button>
-        <button id="armChip" onclick="UI.armory('scrMenu')">Armory</button>
+        <button id="profChip" onclick="UI.commander()"><canvas id="profChipEmb" width="36" height="36" style="width:18px;height:18px"></canvas><span id="profChipName">—</span></button>
       </div>
     </div>
     <div class="sB" id="menuBtns">
@@ -330,6 +332,23 @@
   <div id="ruleTip" class="hidden"></div>
 </div>
 
+<!-- COMMANDER (hub for the active profile: identity + records + Armory) -->
+<div id="scrCommander" class="screen hidden">
+  <div class="split">
+    <div class="sA">
+      <canvas id="cmdEmb" width="192" height="192"></canvas>
+      <h2 class="sh" id="cmdName">—</h2>
+      <div id="cmdRec" class="spanel"></div>
+    </div>
+    <div class="sB">
+      <button class="mbtn" onclick="UI.armory('scrCommander')">Armory</button>
+      <button class="mbtn" onclick="UI.profEdit('scrCommander')">Edit</button>
+      <button class="mbtn" onclick="UI.profiles()">Switch Commander</button>
+      <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
+    </div>
+  </div>
+</div>
+
 <!-- PROFILES -->
 <div id="scrProfiles" class="screen hidden">
   <h2 class="sh">Profiles</h2>
@@ -340,7 +359,7 @@
     <button class="mbtn small" onclick="UI.profEdit()">Edit</button>
     <button class="mbtn small" id="btnProfDel" onclick="UI.profDel()">Delete</button>
   </div>
-  <button class="mbtn small" onclick="UI.go('scrMenu')">Back</button>
+  <button class="mbtn small" onclick="UI.commander()">Back</button>
 </div>
 
 <!-- PROFILE EDIT -->
@@ -352,7 +371,6 @@
   <div class="lbl">Emblem</div>
   <div id="profEmbs"></div>
   <button class="mbtn hot" onclick="UI.profSave()">Save</button>
-  <button class="mbtn small" id="btnProfArm" onclick="UI.armory('scrProfEdit')">Armory</button>
   <button class="mbtn small" onclick="UI.profCancel()">Cancel</button>
 </div>
 
@@ -1653,7 +1671,7 @@ function checkEnd(){
   if(S.mode==='endless'){
     if(!P.alive){
       const w=S.ev?S.ev.wave:0, p=prof(), rec=w>(p.endlessBest||0);
-      if(rec){p.endlessBest=w;saveState();syncEndlessBtn();}
+      if(rec){p.endlessBest=w;saveState();}
       endGame(false,'RUN OVER',(rec?'NEW RECORD — ':'')+
         'You held for '+w+' wave'+(w===1?'':'s')+' · Best '+p.endlessBest+'.');
     }
@@ -1755,8 +1773,7 @@ function showDraft(){
 function syncGauntBtn(){
   const b=$('btnGaunt'); if(!b) return;
   const r=GAUNT.run;
-  b.textContent=(r&&r.ph==='draft')?('Gauntlet · Resume R'+r.rung)
-    :(GAUNT.best?('Gauntlet · Best R'+GAUNT.best):'Gauntlet');
+  b.textContent=(r&&r.ph==='draft')?('Gauntlet · Resume R'+r.rung):'Gauntlet';
 }
 function endGame(win,title,sub){
   if(S.over) return; S.over=true;
@@ -2207,7 +2224,7 @@ function moveKeyCp(dt){
 }
 
 /* ---------- UI / screens ---------- */
-const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrProfiles','scrProfEdit','scrArmory','scrDraft'];
+const SCREENS=['scrMenu','scrCampaign','scrBrief','scrSkirmish','scrVersus','scrHelp','scrPause','scrEnd','scrRules','scrCommander','scrProfiles','scrProfEdit','scrArmory','scrDraft'];
 let briefIdx=0, rulesFrom='scrSkirmish';
 const UI={
   show(id){for(const s of SCREENS)$(s).classList.toggle('hidden',s!==id);},
@@ -2258,16 +2275,19 @@ const UI={
     if(soundOn)AudioSys.click();},
   toggleDebug(){DBG=!DBG;$('btnDebugP').textContent='Debug: '+(DBG?'On':'Off');},
   rules(from){AudioSys.init();AudioSys.click();rulesFrom=from;buildRules();this.show('scrRules');},
-  armory(from){AudioSys.init();AudioSys.click();armFrom=from||'scrMenu';
+  armory(from){AudioSys.init();AudioSys.click();armFrom=from||'scrCommander';
     buildArmory(); this.show('scrArmory');
     if(!armOn){armOn=true; armLast=performance.now(); armT=0; armFire=.7;
       requestAnimationFrame(armoryFrame);}},
   armoryBack(){AudioSys.click();armOn=false;this.show(armFrom);},
+  commander(){AudioSys.init();AudioSys.click();buildCommander();this.show('scrCommander');},
   profiles(){AudioSys.init();AudioSys.click();buildProfiles();this.show('scrProfiles');},
   profNew(){AudioSys.click();
     if(PROFILES.list.length>=MAXPROF){toast('PROFILE LIMIT REACHED');return;}
+    profRet='scrProfiles';
     openProfEdit(mkProfile('COMMANDER '+(PROFILES.list.length+1)),true);},
-  profEdit(){AudioSys.click();const p=prof();
+  profEdit(from){AudioSys.click();const p=prof();
+    profRet=from||'scrProfiles';
     openProfEdit({name:p.name,col:p.col,emb:p.emb},false);},
   profDel(){if(PROFILES.list.length<=1)return;
     AudioSys.click();
@@ -2286,8 +2306,12 @@ const UI={
       const p=PROFILES.list[profEditIdx];
       p.name=name; p.col=profDraft.col; p.emb=profDraft.emb;
     }
-    saveState(); syncProfChip(); buildProfiles(); this.show('scrProfiles');},
-  profCancel(){AudioSys.click();buildProfiles();this.show('scrProfiles');},
+    saveState(); syncProfChip();
+    if(profRet==='scrCommander')buildCommander();else buildProfiles();
+    this.show(profRet);},
+  profCancel(){AudioSys.click();
+    if(profRet==='scrCommander')buildCommander();else buildProfiles();
+    this.show(profRet);},
   rulesDone(){AudioSys.click();hideRuleTip();this.show(rulesFrom);},
   copyDebrief(){AudioSys.click();
     const done=okk=>toast(okk?'DEBRIEF COPIED':'COPY FAILED — SCREENSHOT INSTEAD','#ffd9a1');
@@ -2345,14 +2369,24 @@ function buildCampaign(){
   });
 }
 /* ---------- profiles UI ---------- */
-let profEditIdx=-1, profDraft=null, profDelArm=false;
-function syncEndlessBtn(){
-  const b=$('btnEndless'); if(!b) return;
-  const eb=prof().endlessBest||0;
-  b.textContent=eb?('Endless · Best W'+eb):'Endless';
+let profEditIdx=-1, profDraft=null, profDelArm=false, profRet='scrProfiles';
+/* Commander screen: hub for the active profile — identity, best records, Armory.
+   Records read the working globals (unlocked/GAUNT), which can be newer than
+   the stashed profile copy; endlessBest is written straight onto prof(). */
+function buildCommander(){
+  const p=prof(), c=$('cmdEmb'), g=c.getContext&&c.getContext('2d');
+  if(g){g.clearRect(0,0,192,192);drawEmblem(g,p.emb,96,96,78,PALETTE[p.col].main);}
+  const n=$('cmdName'); n.textContent=p.name; n.style.color=PALETTE[p.col].main;
+  const row=(k,v)=>'<b>'+k+'</b> '+v;
+  const rec=[
+    row('CAMPAIGN',unlocked>0?unlocked+' / '+MISSIONS.length+' MISSIONS':'—'),
+    row('ENDLESS',(p.endlessBest||0)>0?'BEST WAVE '+p.endlessBest:'—'),
+    row('GAUNTLET',GAUNT.best>0?'BEST RUNG '+GAUNT.best+' / '+GAUNT_LEN:'—')];
+  if(GAUNT.wins>0)rec.push(row('FULL CLEARS','×'+GAUNT.wins));
+  $('cmdRec').innerHTML=rec.join('<br>');
 }
 function syncProfChip(){
-  syncEndlessBtn(); syncGauntBtn();
+  syncGauntBtn();
   const p=prof(), c=$('profChipEmb');
   const g=c.getContext&&c.getContext('2d'); if(!g)return;
   g.clearRect(0,0,36,36);
@@ -2387,8 +2421,6 @@ function switchProfile(i){
 function openProfEdit(draft,isNew){
   profDraft=draft; profEditIdx=isNew?-1:PROFILES.active;
   $('profEditTitle').textContent=isNew?'NEW PROFILE':'EDIT PROFILE';
-  /* kit edits apply to the active profile immediately — no draft to link for a new one */
-  $('btnProfArm').classList.toggle('hidden',isNew);
   $('profName').value=draft.name;
   renderProfPickers();
   UI.show('scrProfEdit');
@@ -2417,7 +2449,7 @@ function renderProfPickers(){
    part of the profile-edit draft flow. The viewer is a big top-down marine
    that rotates, walk-cycles, and test-fires the selected weapon skin with
    its true muzzle offset and sound. */
-let armFrom='scrMenu', armOn=false, armT=0, armLast=0, armFire=.7, armFlash=0;
+let armFrom='scrCommander', armOn=false, armT=0, armLast=0, armFire=.7, armFlash=0;
 function buildArmory(){
   const kit=prof().kit;
   const mkRow=(cont,defs,key)=>{
